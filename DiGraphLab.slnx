@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/documents/">
+    <File Path="documents/DiGraphLab_Project_Plan.md" />
+  </Folder>
+  <Folder Name="/Solution Items/">
+    <File Path=".gitattributes" />
+    <File Path=".gitignore" />
+  </Folder>
+  <Project Path="DiGraphLab.Core/DiGraphLab.Core.csproj" />
+  <Project Path="DiGraphLab/DiGraphLab.csproj" />
+</Solution>
