@@ -3,6 +3,49 @@
 ###############################################################################
 * text=auto
 
+# Source code files - ensure LF in repository, CRLF on Windows checkout
+*.cs     text diff=csharp
+*.csx    text diff=csharp
+*.vb     text
+*.fs     text
+*.fsx    text
+*.sql    text
+
+# XML-based project files
+*.csproj text
+*.vbproj text
+*.fsproj text
+*.vcxproj text
+*.props  text
+*.targets text
+*.config text
+*.nuspec text
+
+# Solution files - Windows CRLF
+*.sln    text eol=crlf
+*.slnx   text eol=crlf
+
+# Scripts
+*.ps1    text eol=crlf
+*.cmd    text eol=crlf
+*.bat    text eol=crlf
+*.sh     text eol=lf
+
+# Documentation
+*.md     text
+*.txt    text
+README   text
+LICENSE  text
+
+# Web files
+*.html   text
+*.css    text
+*.js     text
+*.json   text
+*.xml    text
+*.yaml   text
+*.yml    text
+
 ###############################################################################
 # Set default behavior for command prompt diff.
 #
