@@ -26,7 +26,18 @@ public class MainForm : Form
     private readonly System.Collections.Generic.Dictionary<Guid, Microsoft.Msagl.Core.Geometry.Point> _positions = new();
     private readonly ToolStrip _toolStrip;
     private readonly ToolStripButton _freezeToggleButton;
+    private ToolTip _hoverToolTip;
+    private ToolStripLabel _statusLabel;
+    private Guid? _lastHoverVertexId;
+    private Guid? _lastHoverEdgeId;
+    private StatusStrip _statusStrip;
+    private ToolStripStatusLabel _bottomStatusLabel;
     private bool _globalFreeze;
+    private ToolStripButton? _addVertexBtn;
+    private ToolStripButton? _addEdgeBtn;
+    private bool _addVertexMode;
+    private bool _addEdgeMode;
+    private Guid? _pendingEdgeSourceId;
 
     // simple undo/redo
     private readonly System.Collections.Generic.List<IUndoableAction> _undoStack = new();
@@ -52,6 +63,14 @@ public class MainForm : Form
         _freezeToggleButton.CheckedChanged += FreezeToggle_CheckedChanged;
         _toolStrip.Items.Add(_freezeToggleButton);
 
+        _addVertexBtn = new ToolStripButton("Add Vertex") { CheckOnClick = true };
+        _addVertexBtn.Click += (s, e) => ToggleAddVertexMode();
+        _toolStrip.Items.Add(_addVertexBtn);
+
+        _addEdgeBtn = new ToolStripButton("Add Edge") { CheckOnClick = true };
+        _addEdgeBtn.Click += (s, e) => ToggleAddEdgeMode();
+        _toolStrip.Items.Add(_addEdgeBtn);
+
         var importButton = new ToolStripButton("Import") { ToolTipText = "Import graph from JSON" };
         importButton.Click += ImportButton_Click;
         _toolStrip.Items.Add(importButton);
@@ -69,6 +88,10 @@ public class MainForm : Form
         themeDrop.DropDownItems.Add(darkItem);
 
         _toolStrip.Items.Add(themeDrop);
+
+        var optimizeBtn = new ToolStripButton("Optimize Layout") { ToolTipText = "Optimize graph layout" };
+        optimizeBtn.Click += (s, e) => { try { OptimizeLayout(); } catch { } };
+        _toolStrip.Items.Add(optimizeBtn);
 
         _settingsBtn = new ToolStripButton();
         _settingsBtn.DisplayStyle = ToolStripItemDisplayStyle.Image;
@@ -93,6 +116,9 @@ public class MainForm : Form
         _settingsBtn.Click += SettingsBtn_Click;
         _toolStrip.Items.Add(new ToolStripSeparator());
         _toolStrip.Items.Add(_settingsBtn);
+        _statusLabel = new ToolStripLabel();
+        _toolStrip.Items.Add(new ToolStripSeparator());
+        _toolStrip.Items.Add(_statusLabel);
         Controls.Add(_toolStrip);
 
         // Context menus
@@ -109,6 +135,15 @@ public class MainForm : Form
         _viewer.MouseDown += Viewer_MouseDown;
         _viewer.MouseMove += Viewer_MouseMove;
         _viewer.MouseUp += Viewer_MouseUp;
+        _viewer.MouseEnter += Viewer_MouseEnter;
+        _viewer.MouseLeave += Viewer_MouseLeave;
+        _viewer.MouseMove += Viewer_MouseHoverMove;
+        _hoverToolTip = new ToolTip();
+        // status strip at bottom
+        _statusStrip = new StatusStrip { Dock = DockStyle.Bottom };
+        _bottomStatusLabel = new ToolStripStatusLabel();
+        _statusStrip.Items.Add(_bottomStatusLabel);
+        Controls.Add(_statusStrip);
         KeyPreview = true;
         KeyDown += MainForm_KeyDown;
 
@@ -121,6 +156,113 @@ public class MainForm : Form
             else
                 ApplyDarkTheme();
         }
+    }
+
+    private void Viewer_MouseEnter(object? sender, EventArgs e)
+    {
+        UpdateStatusLabel();
+    }
+
+    private void UpdateStatusLabel()
+    {
+        try
+        {
+            var mode = _addVertexMode ? "Add Vertex" : _addEdgeMode ? "Add Edge" : "Navigate";
+            var autos = _settings?.AutoScaleNodeLabels == true ? "Autoscale:On" : "Autoscale:Off";
+            if (_statusLabel != null)
+                _statusLabel.Text = $"Mode: {mode} | {autos}";
+            if (_bottomStatusLabel != null)
+                _bottomStatusLabel.Text = $"Mode: {mode} | {autos}";
+        }
+        catch { }
+    }
+
+    private void Viewer_MouseLeave(object? sender, EventArgs e)
+    {
+        _hoverToolTip?.Hide(_viewer);
+        _lastHoverVertexId = null;
+        _lastHoverEdgeId = null;
+    }
+
+    private void Viewer_MouseHoverMove(object? sender, MouseEventArgs e)
+    {
+        // show tooltip for truncated labels when hovering
+        try
+        {
+            var obj = _viewer.ObjectUnderMouseCursor;
+            if (obj == null)
+            {
+                _hoverToolTip?.Hide(_viewer);
+                _lastHoverVertexId = null;
+                _lastHoverEdgeId = null;
+                return;
+            }
+
+            if (TryResolveModelIdsFromViewerObject(obj, out var vId, out var eId))
+            {
+                if (vId.HasValue && vId != _lastHoverVertexId && _model != null && _model.TryGetVertex(vId.Value, out var v))
+                {
+                    _lastHoverVertexId = vId;
+                    _lastHoverEdgeId = null;
+                    var label = v.Label ?? string.Empty;
+                    if (label.Length > (_settings?.MaxLabelChars ?? 30))
+                    {
+                        _hoverToolTip?.Show(label, _viewer, e.Location.X + 15, e.Location.Y + 15, 3000);
+                    }
+                    else
+                    {
+                        _hoverToolTip?.Hide(_viewer);
+                    }
+                }
+                else if (eId.HasValue && eId != _lastHoverEdgeId && _model != null && _model.TryGetEdge(eId.Value, out var edge))
+                {
+                    _lastHoverEdgeId = eId;
+                    _lastHoverVertexId = null;
+                    var label = edge.Label ?? string.Empty;
+                    if (label.Length > (_settings?.MaxLabelChars ?? 30))
+                    {
+                        _hoverToolTip?.Show(label, _viewer, e.Location.X + 15, e.Location.Y + 15, 3000);
+                    }
+                    else
+                    {
+                        _hoverToolTip?.Hide(_viewer);
+                    }
+                }
+            }
+        }
+        catch { }
+    }
+
+    // Toolbar mode toggles
+    private void ToggleAddVertexMode()
+    {
+        _addVertexMode = !_addVertexMode;
+        if (_addVertexBtn != null) _addVertexBtn.Checked = _addVertexMode;
+        if (_addVertexMode)
+        {
+            _addEdgeMode = false;
+            if (_addEdgeBtn != null) _addEdgeBtn.Checked = false;
+            _pendingEdgeSourceId = null;
+        }
+        _viewer.Cursor = _addVertexMode ? Cursors.Cross : Cursors.Default;
+        UpdateStatusLabel();
+    }
+
+    private void ToggleAddEdgeMode()
+    {
+        _addEdgeMode = !_addEdgeMode;
+        if (_addEdgeBtn != null) _addEdgeBtn.Checked = _addEdgeMode;
+        if (_addEdgeMode)
+        {
+            _addVertexMode = false;
+            if (_addVertexBtn != null) _addVertexBtn.Checked = false;
+        }
+        else
+        {
+            _pendingEdgeSourceId = null;
+        }
+        _viewer.Cursor = _addEdgeMode ? Cursors.Cross : Cursors.Default;
+        UpdateStatusLabel();
     }
 
     private void ApplyLightTheme()
@@ -311,6 +453,120 @@ public class MainForm : Form
         }
 
         _viewer.Graph = msagl;
+        // Normalize label sizes to avoid overly large labels relative to node boxes
+        try
+        {
+            // Dynamic font sizing: scale label fonts based on viewer area and node count
+            if (!_settings.AutoScaleNodeLabels)
+            {
+                // keep previous simple normalization when autoscale disabled
+                foreach (var n in _viewer.Graph?.Nodes ?? System.Linq.Enumerable.Empty<Microsoft.Msagl.Drawing.Node>())
+                {
+                    try
+                    {
+                        if (n.Label != null && n.Label.FontSize > 12)
+                            n.Label.FontSize = 10;
+                    }
+                    catch { }
+                }
+            }
+            else
+            {
+                int nodeCount = _viewer.Graph == null ? 0 : _viewer.Graph.Nodes.Count();
+            var client = _viewer.ClientSize;
+            var area = Math.Max(1, client.Width) * Math.Max(1, client.Height);
+            // occupancy factor: portion of area we want nodes to occupy (tweakable)
+            var occupancy = _settings?.OccupancyFactor ?? 0.25; // portion of area reserved for nodes
+            var targetAreaPerNode = area * occupancy / Math.Max(1, nodeCount);
+            // base constant to convert area -> font scale (empirical)
+            var scaleConst = 200.0;
+            var rawSize = Math.Sqrt(targetAreaPerNode) / Math.Sqrt(scaleConst);
+            var baseFont = 10.0; // baseline font
+            double fontSize = Math.Max(_settings?.MinFontSize ?? 6, Math.Min(_settings?.MaxFontSize ?? 14, baseFont * rawSize));
+            // adjust further by average label length to avoid huge boxes for long labels
+            double avgLen = 0;
+            if (nodeCount > 0 && _viewer.Graph != null)
+            {
+                foreach (var n in _viewer.Graph.Nodes)
+                    avgLen += (n.LabelText?.Length ?? 0);
+                avgLen = nodeCount > 0 ? avgLen / nodeCount : 0;
+                if (avgLen > 20) fontSize = Math.Max(_settings?.MinFontSize ?? 6, fontSize * (20.0 / avgLen));
+
+                foreach (var n in _viewer.Graph.Nodes)
+                {
+                    try
+                    {
+                        if (n.Label != null)
+                        {
+                            var labelText = n.LabelText ?? string.Empty;
+                            if (labelText.Length > (_settings?.MaxLabelChars ?? 30))
+                                n.LabelText = labelText.Substring(0, (_settings?.MaxLabelChars ?? 30)) + "…";
+                            n.Label.FontSize = (float)fontSize;
+                        }
+                    }
+                    catch { }
+                }
+            }
+                // edge labels slightly smaller
+                if (_viewer.Graph != null)
+                {
+                    foreach (var e in _viewer.Graph.Edges)
+                    {
+                        try { if (e.Label != null) e.Label.FontSize = (float)Math.Max(6.0, fontSize * 0.8); } catch { }
+                    }
+                }
+            }
+        }
+        catch { }
+
+        // Attempt to zoom/fit the graph to the viewer so the drawing area appears larger
+        TryFitViewerToGraph();
+    }
+
+    private void TryFitViewerToGraph()
+    {
+        try
+        {
+            if (_viewer == null) return;
+            var vType = _viewer.GetType();
+            var methods = vType.GetMethods(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic);
+            foreach (var m in methods)
+            {
+                var name = m.Name.ToLowerInvariant();
+                if (!(name.Contains("zoom") || name.Contains("fit") || name.Contains("scale"))) continue;
+                if (m.GetParameters().Length != 0) continue;
+                try
+                {
+                    m.Invoke(_viewer, null);
+                    return;
+                }
+                catch { }
+            }
+
+            // fallback: reassign graph to force a layout/refresh which often results in a better fit
+            var g = _viewer.Graph;
+            _viewer.Graph = null;
+            _viewer.Graph = g;
+        }
+        catch { }
+    }
+
+    private void OptimizeLayout()
+    {
+        try
+        {
+            if (_model == null || _viewer == null) return;
+            if (_globalFreeze) return; // respect freeze
+
+            // trigger a layout refresh; reassigning graph often forces MSAGL to recompute layout
+            var g = _viewer.Graph;
+            _viewer.Graph = null;
+            _viewer.Graph = g;
+
+            // After re-layout, try to fit to viewer
+            TryFitViewerToGraph();
+        }
+        catch { }
     }
 
     private void Viewer_MouseMove(object? sender, MouseEventArgs e)
@@ -355,6 +611,8 @@ public class MainForm : Form
                     node.GeometryNode.Center = newPos;
                 _positions[sid] = newPos;
             }
+            // Ensure edge geometry is refreshed after manual node moves
+            EnsureGraphGeometryUpdated();
             _viewer.Invalidate();
         }
         else
@@ -365,8 +623,45 @@ public class MainForm : Form
             {
                 node.GeometryNode.Center = gpt;
                 _positions[id] = gpt;
+                // Ensure edge geometry is refreshed after manual node move
+                EnsureGraphGeometryUpdated();
                 _viewer.Invalidate();
             }
+        }
+    }
+
+    // MSAGL may cache edge curves; after moving nodes manually we attempt to invoke
+    // any internal graph update/layout methods via reflection to force edge geometry
+    // to be recalculated. This is defensive and uses no-arg methods that look like
+    // "update", "layout", "create", "compute" or "calculate".
+    private void EnsureGraphGeometryUpdated()
+    {
+        try
+        {
+            var g = _viewer?.Graph;
+            if (g == null) return;
+            var methods = g.GetType().GetMethods(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public);
+            foreach (var m in methods)
+            {
+                var name = m.Name.ToLowerInvariant();
+                if (!(name.Contains("update") || name.Contains("create") || name.Contains("layout") || name.Contains("compute") || name.Contains("calculate")))
+                    continue;
+                if (m.GetParameters().Length != 0) continue;
+                try
+                {
+                    m.Invoke(g, null);
+                    // stop after first successful invocation
+                    break;
+                }
+                catch
+                {
+                    // ignore and try next
+                }
+            }
+        }
+        catch
+        {
+            // swallow any reflection errors
         }
     }
 
@@ -505,6 +800,68 @@ public class MainForm : Form
 
     private void Viewer_MouseClick(object? sender, MouseEventArgs e)
     {
+        // Add Edge mode: left-click first node to set source, second to set target
+        if (_addEdgeMode && e.Button == System.Windows.Forms.MouseButtons.Left)
+        {
+            var objUnder = _viewer.ObjectUnderMouseCursor;
+            if (TryResolveModelIdsFromViewerObject(objUnder, out var vId, out var eId))
+            {
+                if (vId.HasValue && _model != null)
+                {
+                    if (!_pendingEdgeSourceId.HasValue)
+                    {
+                        _pendingEdgeSourceId = vId.Value;
+                        // inform user to select target
+                        MessageBox.Show(this, "Select target vertex to create edge", "Add Edge", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    }
+                    else
+                    {
+                        var source = _pendingEdgeSourceId.Value;
+                        var target = vId.Value;
+                        if (source != target)
+                        {
+                            // prompt for label
+                            string label;
+                            try { label = Microsoft.VisualBasic.Interaction.InputBox("Edge label (optional):", "Add Edge", ""); }
+                            catch { label = string.Empty; }
+                            var edge = _model.CreateEdge(source, target, label ?? string.Empty);
+                            PushUndo(new CreateEdgeAction(edge.Id, edge.Label, edge.Source.Id, edge.Target.Id));
+                            _pendingEdgeSourceId = null;
+                            RenderGraph(_model);
+                            SelectEdge(edge.Id);
+                        }
+                        else
+                        {
+                            MessageBox.Show(this, "Cannot create self-edge. Select a different target.", "Add Edge", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                            _pendingEdgeSourceId = null;
+                        }
+                    }
+                }
+            }
+            return;
+        }
+        // If in Add Vertex mode, left-click creates a vertex at the clicked location
+        if (_addVertexMode && e.Button == System.Windows.Forms.MouseButtons.Left)
+        {
+            if (_model == null) return;
+            // attempt to capture creation position in graph coordinates
+            if (!TryScreenToGraph(e.Location, out var gpt)) return;
+            // prompt for label
+            var defaultLabel = "V" + _nextAutoLabel++;
+            string label;
+            try { label = Microsoft.VisualBasic.Interaction.InputBox("Vertex label:", "Add Vertex", defaultLabel); }
+            catch { label = defaultLabel; }
+            if (string.IsNullOrWhiteSpace(label)) label = defaultLabel;
+            var v = _model.CreateVertex(label);
+            // set position and record
+            _positions[v.Id] = gpt;
+            // select and prompt properties (label already set) - allow editing again
+            ClearSelection();
+            SelectVertex(v.Id);
+            RenderGraph(_model);
+            return;
+        }
+
         // Right-click behavior: show context menu for object or create vertex on empty space
         if (e.Button == System.Windows.Forms.MouseButtons.Right)
         {
@@ -513,11 +870,9 @@ public class MainForm : Form
             {
                 if (_model == null)
                     return;
-
                 // create a simple auto-labeled vertex
                 var label = "V" + _nextAutoLabel++;
                 // create with default color inverted from background
-                var defaultColor = ColorExtensions.FromHtmlToMsagl("#000000");
                 Vertex v;
                 try
                 {
@@ -922,10 +1277,18 @@ public class MainForm : Form
 
     private void VertexProperties_Click(object? sender, EventArgs e)
     {
-        // placeholder - show simple message box
+        // allow editing of vertex label (simple inline properties)
         if (_selectedVertexId.HasValue && _model != null && _model.TryGetVertex(_selectedVertexId.Value, out var v))
         {
-            MessageBox.Show($"Vertex: {v.Label}\nId: {v.Id}", "Vertex Properties", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            string current = v.Label ?? string.Empty;
+            string input;
+            try { input = Microsoft.VisualBasic.Interaction.InputBox("Edit vertex label:", "Vertex Properties", current); }
+            catch { input = current; }
+            if (!string.IsNullOrWhiteSpace(input) && input != current)
+            {
+                v.Label = input;
+                RenderGraph(_model);
+            }
         }
     }
 
@@ -971,7 +1334,15 @@ public class MainForm : Form
     {
         if (_selectedEdgeId.HasValue && _model != null && _model.TryGetEdge(_selectedEdgeId.Value, out var edge))
         {
-            MessageBox.Show($"Edge: {edge.Label}\n{edge.Source.Label} -> {edge.Target.Label}\nId: {edge.Id}", "Edge Properties", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            string current = edge.Label ?? string.Empty;
+            string input;
+            try { input = Microsoft.VisualBasic.Interaction.InputBox("Edit edge label:", "Edge Properties", current); }
+            catch { input = current; }
+            if (!string.IsNullOrWhiteSpace(input) && input != current)
+            {
+                edge.Label = input;
+                RenderGraph(_model);
+            }
         }
     }
 
@@ -1085,6 +1456,24 @@ public class MainForm : Form
         public void Redo(MainForm f)
         {
             f._model?.RemoveEdge(Edge.Id);
+            f.RenderGraph(f._model!);
+        }
+    }
+
+    private record CreateEdgeAction(Guid Id, string Label, Guid SourceId, Guid TargetId) : IUndoableAction
+    {
+        public void Undo(MainForm f)
+        {
+            f._model?.RemoveEdge(Id);
+            f.RenderGraph(f._model!);
+        }
+
+        public void Redo(MainForm f)
+        {
+            if (f._model != null && f._model.TryGetVertex(SourceId, out var sv) && f._model.TryGetVertex(TargetId, out var tv))
+            {
+                f._model.AddEdge(new DiGraphLab.Core.Edge(Id, sv!, tv!, Label));
+            }
             f.RenderGraph(f._model!);
         }
     }

@@ -8,6 +8,12 @@ namespace DiGraphLab
     {
         public string Theme { get; set; } = "Dark"; // "Light" or "Dark"
         public bool AssignDefaultColorToNew { get; set; } = true;
+        public bool AutoScaleNodeLabels { get; set; } = true;
+        // Controls for autoscaling behaviour
+        public double OccupancyFactor { get; set; } = 0.25; // portion of viewer area reserved for nodes
+        public int MinFontSize { get; set; } = 6;
+        public int MaxFontSize { get; set; } = 14;
+        public int MaxLabelChars { get; set; } = 30;
 
         private static string GetSettingsPath()
         {
