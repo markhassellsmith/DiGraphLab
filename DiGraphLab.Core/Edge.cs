@@ -15,6 +15,8 @@ public class Edge
     public Vertex Source { get; set; }
 
     public Vertex Target { get; set; }
+    // 1-based ordinal index within the graph's edge collection (sides)
+    public int Ordinal { get; set; }
 
     public Edge(Vertex source, Vertex target, string label = "")
     {

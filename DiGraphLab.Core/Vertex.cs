@@ -6,6 +6,9 @@ public class Vertex
 
     public string Label { get; set; }
 
+    // 1-based ordinal index within the graph's vertex collection
+    public int Ordinal { get; set; }
+
     public object? Data { get; set; }
 
     // Optional color expressed as HTML hex (e.g. "#RRGGBB") or named color. When null the UI should

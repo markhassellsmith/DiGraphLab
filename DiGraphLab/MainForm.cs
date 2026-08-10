@@ -1,9 +1,16 @@
 using System;
 using System.Linq;
 using System.Windows.Forms;
+using System.Drawing;
+using Color = System.Drawing.Color;
+using FontStyle = System.Drawing.FontStyle;
+using GraphicsUnit = System.Drawing.GraphicsUnit;
 using Microsoft.Msagl.GraphViewerGdi;
 using Microsoft.Msagl.Drawing;
 using DiGraphLab.Core;
+using System.Text.RegularExpressions;
+using CoreVertex = DiGraphLab.Core.Vertex;
+using CoreEdge = DiGraphLab.Core.Edge;
 
 namespace DiGraphLab;
 
@@ -26,7 +33,17 @@ public class MainForm : Form
     private readonly System.Collections.Generic.Dictionary<Guid, Microsoft.Msagl.Core.Geometry.Point> _positions = new();
     private readonly ToolStrip _toolStrip;
     private readonly ToolStripButton _freezeToggleButton;
+    private readonly System.Collections.Generic.Dictionary<string, System.Drawing.Bitmap> _toolbarIcons = new();
+    private TabControl _mainTab;
+    private DataGridView _matrixGrid;
+    private int _lastSelectedTabIndex = 0;
+    private ToolStripButton? _applyMatrixBtn;
+    private ToolStripButton? _discardMatrixBtn;
+    private bool _matrixDirty = false;
+    private bool _suppressTabChange = false;
     private ToolTip _hoverToolTip;
+    private ToolStripButton? _addMatrixVertexBtn;
+    private ToolStripButton? _removeMatrixVertexBtn;
     private ToolStripLabel _statusLabel;
     private Guid? _lastHoverVertexId;
     private Guid? _lastHoverEdgeId;
@@ -55,10 +72,72 @@ public class MainForm : Form
             Dock = DockStyle.Fill
         };
 
-        Controls.Add(_viewer);
+        // main tab control with two screens: Graph view and Matrix view
+        _mainTab = new TabControl { Dock = DockStyle.Fill };
+        var graphTab = new TabPage("Graph") { Padding = new Padding(0) };
+        var matrixTab = new TabPage("Adjacency Matrix") { Padding = new Padding(0) };
+
+        graphTab.Controls.Add(_viewer);
+        _matrixGrid = new DataGridView { Dock = DockStyle.Fill, AllowUserToAddRows = false, AllowUserToDeleteRows = false };
+        matrixTab.Controls.Add(_matrixGrid);
+
+        // monitor edits to mark matrix dirty
+        _matrixGrid.CellValueChanged += (s, e) => { _matrixDirty = true; ToggleMatrixApplyButtons(); };
+        _matrixGrid.CurrentCellDirtyStateChanged += (s, e) => { if (_matrixGrid.IsCurrentCellDirty) _matrixGrid.CommitEdit(DataGridViewDataErrorContexts.Commit); };
+        // allow typing '0'/'1' into checkbox cells by parsing string input to bool on commit
+        _matrixGrid.CellParsing += (s, e) =>
+        {
+            try
+            {
+                if (e.ColumnIndex >= 2 && e.Value is string sVal && int.TryParse(sVal.Trim(), out var xi))
+                {
+                    e.Value = xi != 0;
+                    e.ParsingApplied = true;
+                }
+            }
+            catch { }
+        };
+
+        // accept keyboard digits 0/1 to set checkbox cells when focused
+        _matrixGrid.KeyDown += (s, e) =>
+        {
+            try
+            {
+                var cell = _matrixGrid.CurrentCell;
+                if (cell == null) return;
+                if (cell.ColumnIndex < 2) return; // only adjacency checkbox columns
+
+                bool? desired = null;
+                if (e.KeyCode == Keys.D0 || e.KeyCode == Keys.NumPad0) desired = false;
+                else if (e.KeyCode == Keys.D1 || e.KeyCode == Keys.NumPad1) desired = true;
+
+                if (desired.HasValue)
+                {
+                    // set value and commit
+                    cell.Value = desired.Value;
+                    _matrixDirty = true;
+                    ToggleMatrixApplyButtons();
+                    e.Handled = true;
+                }
+            }
+            catch { }
+        };
+
+        // suppress DataGridView errors from transient edit states
+        _matrixGrid.DataError += (s, e) => { e.ThrowException = false; };
+
+        _mainTab.TabPages.Add(graphTab);
+        _mainTab.TabPages.Add(matrixTab);
+        Controls.Add(_mainTab);
+        _mainTab.SelectedIndexChanged += MainTab_SelectedIndexChanged;
 
         // toolbar
         _toolStrip = new ToolStrip { Dock = DockStyle.Top };
+        // improve spacing and readability of toolbar items
+        _toolStrip.GripStyle = ToolStripGripStyle.Hidden;
+        _toolStrip.ImageScalingSize = new System.Drawing.Size(24, 24);
+        _toolStrip.Padding = new Padding(4);
+        _toolStrip.RenderMode = ToolStripRenderMode.System;
         _freezeToggleButton = new ToolStripButton("Freeze layout") { CheckOnClick = true };
         _freezeToggleButton.CheckedChanged += FreezeToggle_CheckedChanged;
         _toolStrip.Items.Add(_freezeToggleButton);
@@ -70,6 +149,8 @@ public class MainForm : Form
         _addEdgeBtn = new ToolStripButton("Add Edge") { CheckOnClick = true };
         _addEdgeBtn.Click += (s, e) => ToggleAddEdgeMode();
         _toolStrip.Items.Add(_addEdgeBtn);
+        // separate creation/edit controls from import/export controls for clarity
+        _toolStrip.Items.Add(new ToolStripSeparator());
 
         var importButton = new ToolStripButton("Import") { ToolTipText = "Import graph from JSON" };
         importButton.Click += ImportButton_Click;
@@ -78,6 +159,57 @@ public class MainForm : Form
         var exportButton = new ToolStripButton("Export") { ToolTipText = "Export graph to JSON" };
         exportButton.Click += ExportButton_Click;
         _toolStrip.Items.Add(exportButton);
+        // group export/import visually
+        _toolStrip.Items.Add(new ToolStripSeparator());
+        var exportAdjBtn = new ToolStripButton("Export Adjacency") { ToolTipText = "Export adjacency matrix (dense/sparse)" };
+        exportAdjBtn.Click += ExportAdjacency_Click;
+        _toolStrip.Items.Add(exportAdjBtn);
+
+        var importAdjBtn = new ToolStripButton("Import Adjacency") { ToolTipText = "Import adjacency matrix (dense/sparse)" };
+        importAdjBtn.Click += ImportAdjacency_Click;
+        _toolStrip.Items.Add(importAdjBtn);
+
+        // Add explicit Apply/Discard controls for matrix edits
+        _applyMatrixBtn = new ToolStripButton("Apply Matrix") { Visible = false };
+        _applyMatrixBtn.Click += (s, e) => { ApplyMatrixGridToModel(); _matrixDirty = false; ToggleMatrixApplyButtons(); };
+        _toolStrip.Items.Add(_applyMatrixBtn);
+
+        _discardMatrixBtn = new ToolStripButton("Discard Matrix") { Visible = false };
+        _discardMatrixBtn.Click += (s, e) => { PopulateMatrixGrid(); _matrixDirty = false; ToggleMatrixApplyButtons(); };
+        _toolStrip.Items.Add(_discardMatrixBtn);
+
+        // Add matrix-specific add/remove vertex buttons
+        _addMatrixVertexBtn = new ToolStripButton("Add Vertex") { Visible = false };
+        _addMatrixVertexBtn.Click += (s, e) => { AddMatrixVertex(); };
+        _toolStrip.Items.Add(_addMatrixVertexBtn);
+
+        _removeMatrixVertexBtn = new ToolStripButton("Remove Vertex") { Visible = false };
+        _removeMatrixVertexBtn.Click += (s, e) => { RemoveSelectedMatrixVertex(); };
+        _toolStrip.Items.Add(_removeMatrixVertexBtn);
+
+        // create and assign simple vector icons for primary actions
+        // assign icons from IconResources and set display style
+        try
+        {
+            if (_addVertexBtn != null) { _addVertexBtn.Image = IconResources.Add; _addVertexBtn.DisplayStyle = ToolStripItemDisplayStyle.ImageAndText; }
+            if (_addEdgeBtn != null) { _addEdgeBtn.Image = IconResources.Edge; _addEdgeBtn.DisplayStyle = ToolStripItemDisplayStyle.ImageAndText; }
+            if (importButton != null) { importButton.Image = IconResources.Import; importButton.DisplayStyle = ToolStripItemDisplayStyle.ImageAndText; }
+            if (exportButton != null) { exportButton.Image = IconResources.Export; exportButton.DisplayStyle = ToolStripItemDisplayStyle.ImageAndText; }
+            if (exportAdjBtn != null) { exportAdjBtn.Image = IconResources.Matrix; exportAdjBtn.DisplayStyle = ToolStripItemDisplayStyle.ImageAndText; }
+        if (importAdjBtn != null) { importAdjBtn.Image = IconResources.Matrix; importAdjBtn.DisplayStyle = ToolStripItemDisplayStyle.ImageAndText; }
+        }
+        catch { }
+
+        // give each toolbar item a little breathing room
+        foreach (ToolStripItem it in _toolStrip.Items)
+        {
+            try
+            {
+                it.Padding = new Padding(8, 2, 8, 2);
+                it.Margin = new Padding(3, 0, 3, 0);
+            }
+            catch { }
+        }
 
         var themeDrop = new ToolStripDropDownButton("Theme") { ToolTipText = "Select theme" };
         var lightItem = new ToolStripMenuItem("Light");
@@ -92,6 +224,11 @@ public class MainForm : Form
         var optimizeBtn = new ToolStripButton("Optimize Layout") { ToolTipText = "Optimize graph layout" };
         optimizeBtn.Click += (s, e) => { try { OptimizeLayout(); } catch { } };
         _toolStrip.Items.Add(optimizeBtn);
+
+        // Reindex ordinals command
+        var reindexBtn = new ToolStripButton("Reindex Ordinals") { ToolTipText = "Reindex vertex and edge ordinals to be dense (1..N)" };
+        reindexBtn.Click += (s, e) => { if (MessageBox.Show(this, "Reindex ordinals to a dense 1..N sequence and rename autogenerated labels?", "Reindex Ordinals", MessageBoxButtons.YesNo) == DialogResult.Yes) ReindexOrdinals(); };
+        _toolStrip.Items.Add(reindexBtn);
 
         _settingsBtn = new ToolStripButton();
         _settingsBtn.DisplayStyle = ToolStripItemDisplayStyle.Image;
@@ -158,9 +295,410 @@ public class MainForm : Form
         }
     }
 
+    private void AddMatrixVertex()
+    {
+        try
+        {
+            // append a new vertex with autogenerated label V{n}
+            int nextOrd = (_model?.Vertices.Count ?? 0) + 1;
+            var v = new CoreVertex($"V{nextOrd}");
+            // add to model immediately so PopulateMatrixGrid can read it
+            _model?.AddVertex(v);
+            PopulateMatrixGrid();
+            _matrixDirty = true;
+            ToggleMatrixApplyButtons();
+        }
+        catch (Exception ex) { MessageBox.Show(this, "Failed to add vertex: " + ex.Message); }
+    }
+
+    private void ReindexOrdinals()
+    {
+        if (_model == null) return;
+        try
+        {
+            var prevModel = _model;
+            var prevPositions = new System.Collections.Generic.Dictionary<Guid, Microsoft.Msagl.Core.Geometry.Point>(_positions);
+            var prevFrozen = new System.Collections.Generic.HashSet<Guid>(_frozenNodes);
+
+            var ordered = _model.Vertices.OrderBy(v => v.Ordinal).ThenBy(v => v.Label).ToList();
+            int n = ordered.Count;
+            var idToNewOrdinal = new System.Collections.Generic.Dictionary<Guid, int>();
+            for (int i = 0; i < n; i++) idToNewOrdinal[ordered[i].Id] = i + 1;
+
+            var autoRegex = new Regex("^V\\d+$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+            foreach (var v in ordered)
+            {
+                v.Ordinal = idToNewOrdinal[v.Id];
+                if (!string.IsNullOrEmpty(v.Label) && autoRegex.IsMatch(v.Label))
+                    v.Label = $"V{v.Ordinal}";
+            }
+
+            var edgesOrdered = _model.Edges.OrderBy(e => e.Ordinal).ThenBy(e => e.Label).ToList();
+            for (int i = 0; i < edgesOrdered.Count; i++) edgesOrdered[i].Ordinal = i + 1;
+
+            PushUndo(new ReplaceGraphAction(
+                prevModel,
+                prevPositions,
+                prevFrozen,
+                _model,
+                new System.Collections.Generic.Dictionary<Guid, Microsoft.Msagl.Core.Geometry.Point>(_positions),
+                new System.Collections.Generic.HashSet<Guid>(_frozenNodes)));
+
+            RenderGraph(_model);
+            if (_bottomStatusLabel != null) _bottomStatusLabel.Text = "Reindexed ordinals";
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, "Reindex failed: " + ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    private void RemoveSelectedMatrixVertex()
+    {
+        try
+        {
+            if (_matrixGrid.CurrentRow == null) return;
+            var idCell = _matrixGrid.CurrentRow.Cells[0].Value?.ToString();
+            if (string.IsNullOrEmpty(idCell) || !Guid.TryParse(idCell, out var gid))
+            {
+                MessageBox.Show(this, "Cannot determine vertex id to remove.", "Remove vertex", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            // remove from model
+            var (v, removedEdges) = _model?.RemoveVertex(gid) ?? (null, new System.Collections.Generic.List<CoreEdge>());
+            PopulateMatrixGrid();
+            _matrixDirty = true;
+            ToggleMatrixApplyButtons();
+        }
+        catch (Exception ex) { MessageBox.Show(this, "Failed to remove vertex: " + ex.Message); }
+    }
+
+    private Bitmap CreateIcon(Color bg, string text)
+    {
+        // generate a sharper 24x24 icon with rounded background and centered glyph
+        const int size = 24;
+        var bmp = new Bitmap(size, size);
+        using (var g = Graphics.FromImage(bmp))
+        {
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+            g.Clear(Color.Transparent);
+
+            // rounded rectangle background with subtle gradient
+            var rect = new RectangleF(0.5f, 0.5f, size - 1, size - 1);
+            using var path = new System.Drawing.Drawing2D.GraphicsPath();
+            float r = 5f;
+            path.AddArc(rect.X, rect.Y, r, r, 180, 90);
+            path.AddArc(rect.Right - r, rect.Y, r, r, 270, 90);
+            path.AddArc(rect.Right - r, rect.Bottom - r, r, r, 0, 90);
+            path.AddArc(rect.X, rect.Bottom - r, r, r, 90, 90);
+            path.CloseFigure();
+
+            using var lg = new System.Drawing.Drawing2D.LinearGradientBrush(rect, ControlPaint.Light(bg), ControlPaint.Dark(bg), 90f);
+            using var pen = new Pen(ControlPaint.Dark(bg)) { Width = 1f };
+            g.FillPath(lg, path);
+            g.DrawPath(pen, path);
+
+            // draw glyph centered
+            using var f = new Font(SystemFonts.DefaultFont.FontFamily, 11f, FontStyle.Bold, GraphicsUnit.Pixel);
+            var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
+            var glyphRect = new RectangleF(0, 0, size, size);
+            using var brush = new SolidBrush(Color.FromArgb(230, Color.White));
+            g.DrawString(text, f, brush, glyphRect, sf);
+        }
+
+        return bmp;
+    }
+
     private void Viewer_MouseEnter(object? sender, EventArgs e)
     {
         UpdateStatusLabel();
+    }
+
+    private void PopulateMatrixGrid()
+    {
+        if (_model == null) return;
+
+        var (matrix, labels) = _model.ToAdjacencyMatrix();
+        int n = matrix.GetLength(0);
+
+        _matrixGrid.SuspendLayout();
+        _matrixGrid.Columns.Clear();
+        _matrixGrid.Rows.Clear();
+        _matrixGrid.SelectionMode = DataGridViewSelectionMode.CellSelect;
+        _matrixGrid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.None;
+        _matrixGrid.RowHeadersVisible = false;
+
+        // hidden GUID column
+        var idCol = new DataGridViewTextBoxColumn();
+        idCol.Name = "Id";
+        idCol.Visible = false;
+        _matrixGrid.Columns.Add(idCol);
+
+        // label column (editable)
+        var textCol = new DataGridViewTextBoxColumn();
+        textCol.Name = "Vertex";
+        textCol.ReadOnly = false;
+        textCol.Width = 120;
+        _matrixGrid.Columns.Add(textCol);
+
+        // subsequent columns are checkboxes for adjacency
+        for (int j = 0; j < n; j++)
+        {
+            var cb = new DataGridViewCheckBoxColumn();
+            cb.Name = labels[j];
+            cb.Width = 40;
+            cb.HeaderText = labels[j];
+            _matrixGrid.Columns.Add(cb);
+        }
+
+        // determine vertices in the same order used by ToAdjacencyMatrix (by Ordinal then label)
+        var orderedVerts = _model.Vertices.OrderBy(v => v.Ordinal).ThenBy(v => v.Label).ToList();
+        for (int i = 0; i < n; i++)
+        {
+            var values = new object[n + 2];
+            // hidden guid column
+            values[0] = orderedVerts[i].Id.ToString();
+            values[1] = labels[i];
+            for (int j = 0; j < n; j++) values[j + 2] = matrix[i, j];
+            _matrixGrid.Rows.Add(values);
+        }
+
+        _matrixGrid.ResumeLayout();
+        // clear dirty flag after loading
+        _matrixDirty = false;
+        ToggleMatrixApplyButtons();
+    }
+
+    private void ToggleMatrixApplyButtons()
+    {
+        try
+        {
+            if (_applyMatrixBtn != null) _applyMatrixBtn.Visible = _matrixDirty && _mainTab.SelectedTab != null && _mainTab.SelectedTab.Text == "Adjacency Matrix";
+            if (_discardMatrixBtn != null) _discardMatrixBtn.Visible = _matrixDirty && _mainTab.SelectedTab != null && _mainTab.SelectedTab.Text == "Adjacency Matrix";
+        }
+        catch { }
+    }
+
+    private void ApplyMatrixGridToModel()
+    {
+        if (_model == null) return;
+        try
+        {
+            int n = Math.Max(0, _matrixGrid.RowCount);
+            if (n == 0) return;
+
+            // validate square grid (columns include hidden Id and label columns)
+            if (_matrixGrid.Columns.Count - 2 != n)
+            {
+                MessageBox.Show(this, "Matrix must be square: number of rows must equal number of columns.", "Invalid matrix", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            // read labels from first column and validate uniqueness
+            var labels = new string[n];
+            var seen = new System.Collections.Generic.HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            for (int i = 0; i < n; i++)
+            {
+                // Id is column 0 (hidden), label is column 1
+                var lbl = _matrixGrid.Rows[i].Cells[1].Value?.ToString()?.Trim();
+                if (string.IsNullOrEmpty(lbl)) lbl = $"V{i + 1}";
+                if (seen.Contains(lbl))
+                {
+                    MessageBox.Show(this, $"Duplicate vertex label '{lbl}' found. Labels must be unique.", "Duplicate labels", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+                seen.Add(lbl);
+                labels[i] = lbl!;
+            }
+
+            // read boolean matrix
+            var matrix = new bool[n, n];
+            for (int i = 0; i < n; i++)
+            {
+                for (int j = 0; j < n; j++)
+                {
+                    var cell = _matrixGrid.Rows[i].Cells[j + 2].Value; // offset by 2: Id + Label
+                    bool val = false;
+                    if (cell is bool b) val = b;
+                    else if (cell is int ii) val = ii != 0;
+                    else if (cell is string s && int.TryParse(s, out var x)) val = x != 0;
+                    matrix[i, j] = val;
+                }
+            }
+
+            // mapping: try to reuse existing vertices by label (case-insensitive)
+            var oldGraph = _model;
+            var labelToVertex = oldGraph.Vertices.ToDictionary(v => v.Label ?? string.Empty, StringComparer.OrdinalIgnoreCase);
+
+            var mappedVertices = new System.Collections.Generic.List<CoreVertex>(n);
+            var reusedIds = new System.Collections.Generic.HashSet<Guid>();
+            int addedVertices = 0;
+            int removedVertices = 0;
+
+            for (int i = 0; i < n; i++)
+            {
+                var lbl = labels[i];
+                // attempt to map by hidden GUID first
+                var idCell = _matrixGrid.Rows[i].Cells[0].Value?.ToString();
+                if (!string.IsNullOrEmpty(idCell) && Guid.TryParse(idCell, out var parsedId) && oldGraph.TryGetVertex(parsedId, out var byId))
+                {
+                    mappedVertices.Add(byId);
+                    reusedIds.Add(byId.Id);
+                }
+                else if (labelToVertex.TryGetValue(lbl, out var existing))
+                {
+                    mappedVertices.Add(existing);
+                    reusedIds.Add(existing.Id);
+                }
+                else
+                {
+                    var nv = new CoreVertex(lbl);
+                    mappedVertices.Add(nv);
+                    addedVertices++;
+                }
+            }
+
+            // any old vertices not reused are removed
+            removedVertices = oldGraph.Vertices.Count - reusedIds.Count;
+
+            // build new graph, reusing vertex instances where available
+            var newGraph = new DirectedGraph();
+            foreach (var v in mappedVertices)
+            {
+                // if vertex already exists in oldGraph, reuse that instance to preserve Id/color
+                if (oldGraph.TryGetVertex(v.Id, out var _) && labelToVertex.ContainsKey(v.Label))
+                {
+                    // get the original vertex instance by label
+                    var orig = labelToVertex[v.Label];
+                    newGraph.AddVertex(orig);
+                }
+                else
+                {
+                    newGraph.AddVertex(v);
+                }
+            }
+
+            // build mapping from old edge pairs to edge for attribute preservation
+            var oldEdgeMap = new System.Collections.Generic.Dictionary<(Guid s, Guid t), CoreEdge>();
+            foreach (var e in oldGraph.Edges) oldEdgeMap[(e.Source.Id, e.Target.Id)] = e;
+
+            int addedEdges = 0;
+            int removedEdges = 0;
+
+            // add edges according to matrix
+            for (int i = 0; i < n; i++)
+            {
+                for (int j = 0; j < n; j++)
+                {
+                    if (!matrix[i, j]) continue;
+                    var src = newGraph.Vertices.ElementAt(i);
+                    var tgt = newGraph.Vertices.ElementAt(j);
+                    // see if old graph had this edge between the corresponding original ids
+                    CoreEdge? oldEdge = null;
+                    if (labelToVertex.TryGetValue(labels[i], out var origSrc) && labelToVertex.TryGetValue(labels[j], out var origTgt))
+                    {
+                        oldEdgeMap.TryGetValue((origSrc.Id, origTgt.Id), out CoreEdge foundEdge);
+                        oldEdge = foundEdge;
+                    }
+
+                    if (oldEdge != null)
+                    {
+                        var e = new CoreEdge(oldEdge.Id, src, tgt, oldEdge.Label);
+                        e.Color = oldEdge.Color;
+                        e.Ordinal = oldEdge.Ordinal;
+                        newGraph.AddEdge(e);
+                    }
+                    else
+                    {
+                        var e = new CoreEdge(src, tgt, string.Empty);
+                        newGraph.AddEdge(e);
+                        addedEdges++;
+                    }
+                }
+            }
+
+            // compute removedEdges as old edges not present in new
+            var newEdgePairs = new System.Collections.Generic.HashSet<(Guid s, Guid t)>();
+            foreach (var e in newGraph.Edges) newEdgePairs.Add((e.Source.Id, e.Target.Id));
+            foreach (var e in oldGraph.Edges)
+            {
+                if (!newEdgePairs.Contains((e.Source.Id, e.Target.Id))) removedEdges++;
+            }
+
+            // capture positions and frozen nodes for reused vertices
+            var newPositions = new System.Collections.Generic.Dictionary<Guid, Microsoft.Msagl.Core.Geometry.Point>();
+            var newFrozen = new System.Collections.Generic.HashSet<Guid>();
+            foreach (var v in newGraph.Vertices)
+            {
+                if (_positions.TryGetValue(v.Id, out var p)) newPositions[v.Id] = p;
+                if (_frozenNodes.Contains(v.Id)) newFrozen.Add(v.Id);
+            }
+
+            // prepare undo action: replace graph
+            var prevModel = _model;
+            var prevPositions = new System.Collections.Generic.Dictionary<Guid, Microsoft.Msagl.Core.Geometry.Point>(_positions);
+            var prevFrozen = new System.Collections.Generic.HashSet<Guid>(_frozenNodes);
+
+            // apply
+            _model = newGraph;
+            _positions.Clear();
+            foreach (var kv in newPositions) _positions[kv.Key] = kv.Value;
+            _frozenNodes.Clear();
+            foreach (var id in newFrozen) _frozenNodes.Add(id);
+
+            // push undo that restores previous model and positions
+            PushUndo(new ReplaceGraphAction(prevModel, prevPositions, prevFrozen, newGraph, newPositions, newFrozen));
+
+            RenderGraph(_model);
+            if (_bottomStatusLabel != null)
+                _bottomStatusLabel.Text = $"Applied matrix edits: +{addedVertices} vertices, -{removedVertices} vertices, +{addedEdges} edges, -{removedEdges} edges";
+            UpdateStatusLabel();
+            _matrixDirty = false;
+            ToggleMatrixApplyButtons();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, "Failed to apply matrix edits: " + ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    private void MainTab_SelectedIndexChanged(object? sender, EventArgs e)
+    {
+        try
+        {
+            if (_suppressTabChange) return;
+
+            if (_mainTab.SelectedTab != null && _mainTab.SelectedTab.Text == "Adjacency Matrix")
+            {
+                // switching to matrix view: populate grid from model
+                PopulateMatrixGrid();
+                _matrixDirty = false;
+                ToggleMatrixApplyButtons();
+            }
+            else if (_mainTab.SelectedTab != null && _mainTab.SelectedTab.Text == "Graph")
+            {
+                // switching back to graph view: auto-commit pending cell edits then auto-apply changes
+                try
+                {
+                    // ensure any active cell edit is committed
+                    _matrixGrid.EndEdit();
+                    _matrixGrid.CommitEdit(DataGridViewDataErrorContexts.Commit);
+                }
+                catch { }
+
+                if (_matrixDirty)
+                {
+                    // automatically apply changes without prompting for a smoother UX
+                    ApplyMatrixGridToModel();
+                    _matrixDirty = false;
+                    ToggleMatrixApplyButtons();
+                }
+
+                RenderGraph(_model!);
+            }
+        }
+        catch { }
     }
 
     private void UpdateStatusLabel()
@@ -231,6 +769,50 @@ public class MainForm : Form
             }
         }
         catch { }
+    }
+
+    private void ExportAdjacency_Click(object? sender, EventArgs e)
+    {
+        if (_model == null) return;
+        using var dlg = new SaveFileDialog { Filter = "Adjacency JSON|*.adj.json|All files|*.*", DefaultExt = "adj.json", FileName = "graph.adj.json" };
+        if (dlg.ShowDialog(this) == DialogResult.OK)
+        {
+            try
+            {
+                var json = _model.ToAdjacencyJson();
+                System.IO.File.WriteAllText(dlg.FileName, json);
+                MessageBox.Show(this, "Adjacency exported.", "Export", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                try { if (_bottomStatusLabel != null) _bottomStatusLabel.Text = $"Exported adjacency: {dlg.FileName}"; } catch { }
+                UpdateStatusLabel();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, "Export failed: " + ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+    }
+
+    private void ImportAdjacency_Click(object? sender, EventArgs e)
+    {
+        using var dlg = new OpenFileDialog { Filter = "Adjacency JSON|*.adj.json|JSON|*.json|All files|*.*" };
+        if (dlg.ShowDialog(this) == DialogResult.OK)
+        {
+            try
+            {
+                var g = DiGraphLab.Core.DirectedGraph.LoadFromAdjacencyFile(dlg.FileName);
+                _model = g;
+                // clear selection/positions when loading a fresh graph
+                try { ClearSelection(); } catch { }
+                RenderGraph(_model);
+                MessageBox.Show(this, "Adjacency imported.", "Import", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                try { if (_bottomStatusLabel != null) _bottomStatusLabel.Text = $"Imported adjacency: {dlg.FileName}"; } catch { }
+                UpdateStatusLabel();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, "Import failed: " + ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
     }
 
     // Toolbar mode toggles
@@ -1389,6 +1971,35 @@ public class MainForm : Form
     {
         void Undo(MainForm f);
         void Redo(MainForm f);
+    }
+
+    private record ReplaceGraphAction(DirectedGraph? OldGraph, System.Collections.Generic.Dictionary<Guid, Microsoft.Msagl.Core.Geometry.Point> OldPositions, System.Collections.Generic.HashSet<Guid> OldFrozen, DirectedGraph NewGraph, System.Collections.Generic.Dictionary<Guid, Microsoft.Msagl.Core.Geometry.Point> NewPositions, System.Collections.Generic.HashSet<Guid> NewFrozen) : IUndoableAction
+    {
+        public void Undo(MainForm f)
+        {
+            f._model = OldGraph;
+            f._positions.Clear();
+            if (OldPositions != null)
+            {
+                foreach (var kv in OldPositions) f._positions[kv.Key] = kv.Value;
+            }
+            f._frozenNodes.Clear();
+            if (OldFrozen != null)
+            {
+                foreach (var id in OldFrozen) f._frozenNodes.Add(id);
+            }
+            f.RenderGraph(f._model!);
+        }
+
+        public void Redo(MainForm f)
+        {
+            f._model = NewGraph;
+            f._positions.Clear();
+            foreach (var kv in NewPositions) f._positions[kv.Key] = kv.Value;
+            f._frozenNodes.Clear();
+            foreach (var id in NewFrozen) f._frozenNodes.Add(id);
+            f.RenderGraph(f._model!);
+        }
     }
 
     private record CreateVertexAction(Guid Id, string Label, Microsoft.Msagl.Core.Geometry.Point? Position) : IUndoableAction
