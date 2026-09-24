@@ -1,0 +1,3 @@
+/* Minimal styles for local vis replacement */
+#mynetwork svg { background: #f8f8f8; }
+svg text { font-family: Segoe UI, Arial, sans-serif; }
