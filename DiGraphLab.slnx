@@ -7,5 +7,7 @@
     <File Path=".gitignore" />
   </Folder>
   <Project Path="DiGraphLab.Core/DiGraphLab.Core.csproj" />
+  <Project Path="DiGraphLab.Harmony.Viewer/DiGraphLab.Harmony.Viewer.csproj" />
+  <Project Path="DiGraphLab.Harmony/DiGraphLab.Harmony.csproj" />
   <Project Path="DiGraphLab/DiGraphLab.csproj" />
 </Solution>

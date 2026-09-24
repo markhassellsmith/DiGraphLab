@@ -22,7 +22,7 @@ static class Program
         var c = graph.CreateVertex("C");
         graph.CreateEdge(a.Id, b.Id);
         graph.CreateEdge(b.Id, c.Id);
-        graph.CreateEdge(a.Id, a.Id, "self-loop");
+        graph.CreateEdge(a.Id, a.Id);
 
         var main = new MainForm();
         main.RenderGraph(graph);

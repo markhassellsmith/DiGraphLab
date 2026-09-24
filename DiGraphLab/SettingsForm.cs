@@ -21,55 +21,102 @@ namespace DiGraphLab
         {
             _settings = settings;
             Text = "Settings";
-            Width = 400;
-            Height = 200;
+            ClientSize = new Size(560, 320);
+            MinimumSize = new Size(560, 320);
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             StartPosition = FormStartPosition.CenterParent;
+            Padding = new Padding(10);
 
-            var lbl = new Label { Text = "Theme:", Left = 10, Top = 10, Width = 50 };
-            Controls.Add(lbl);
+            var root = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 1,
+                RowCount = 6
+            };
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            Controls.Add(root);
 
-            _light = new RadioButton { Text = "Light", Left = 70, Top = 10, Width = 80 };
-            _dark = new RadioButton { Text = "Dark", Left = 160, Top = 10, Width = 80 };
-            Controls.Add(_light);
-            Controls.Add(_dark);
+            var themeRow = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                AutoSize = true,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = false
+            };
+            var lbl = new Label { Text = "Theme:", AutoSize = true, Margin = new Padding(0, 7, 8, 0) };
+            themeRow.Controls.Add(lbl);
 
-            _assignDefaultColor = new CheckBox { Text = "Assign default color to new nodes/edges", Left = 10, Top = 50, Width = 350 };
-            Controls.Add(_assignDefaultColor);
-            _autoScaleLabels = new CheckBox { Text = "Auto-scale node labels", Left = 10, Top = 72, Width = 200 };
-            Controls.Add(_autoScaleLabels);
+            _light = new RadioButton { Text = "Light", AutoSize = true, Margin = new Padding(0, 4, 10, 0) };
+            _dark = new RadioButton { Text = "Dark", AutoSize = true, Margin = new Padding(0, 4, 0, 0) };
+            themeRow.Controls.Add(_light);
+            themeRow.Controls.Add(_dark);
+            root.Controls.Add(themeRow, 0, 0);
 
-            var lblOcc = new Label { Text = "Occupancy (0-1):", Left = 220, Top = 72, Width = 100 };
-            Controls.Add(lblOcc);
-            _occupancy = new NumericUpDown { Left = 320, Top = 70, Width = 50, DecimalPlaces = 2, Increment = 0.05M, Minimum = 0.05M, Maximum = 0.9M };
-            Controls.Add(_occupancy);
+            _assignDefaultColor = new CheckBox { Text = "Assign default color to new nodes/edges", AutoSize = true, Margin = new Padding(0, 2, 0, 0) };
+            root.Controls.Add(_assignDefaultColor, 0, 1);
+            _autoScaleLabels = new CheckBox { Text = "Auto-scale node labels", AutoSize = true, Margin = new Padding(0, 2, 0, 0) };
+            root.Controls.Add(_autoScaleLabels, 0, 2);
 
-            var lblMin = new Label { Text = "Min font:", Left = 10, Top = 100, Width = 60 };
-            Controls.Add(lblMin);
-            _minFont = new NumericUpDown { Left = 80, Top = 98, Width = 60, Minimum = 4, Maximum = 24 };
-            Controls.Add(_minFont);
+            var numericGrid = new TableLayoutPanel
+            {
+                Dock = DockStyle.Top,
+                ColumnCount = 4,
+                AutoSize = true,
+                Margin = new Padding(0, 8, 0, 0)
+            };
+            numericGrid.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            numericGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+            numericGrid.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            numericGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
 
-            var lblMax = new Label { Text = "Max font:", Left = 150, Top = 100, Width = 60 };
-            Controls.Add(lblMax);
-            _maxFont = new NumericUpDown { Left = 220, Top = 98, Width = 60, Minimum = 6, Maximum = 48 };
-            Controls.Add(_maxFont);
+            var lblOcc = new Label { Text = "Occupancy (0-1):", AutoSize = true, Margin = new Padding(0, 7, 8, 0) };
+            _occupancy = new NumericUpDown { Width = 90, DecimalPlaces = 2, Increment = 0.05M, Minimum = 0.05M, Maximum = 0.9M };
+            var lblMin = new Label { Text = "Min font:", AutoSize = true, Margin = new Padding(16, 7, 8, 0) };
+            _minFont = new NumericUpDown { Width = 90, Minimum = 4, Maximum = 24 };
 
-            var lblMaxChars = new Label { Text = "Max label chars:", Left = 300, Top = 100, Width = 100 };
-            Controls.Add(lblMaxChars);
-            _maxLabelChars = new NumericUpDown { Left = 400, Top = 98, Width = 60, Minimum = 10, Maximum = 200 };
-            Controls.Add(_maxLabelChars);
+            var lblMax = new Label { Text = "Max font:", AutoSize = true, Margin = new Padding(0, 7, 8, 0) };
+            _maxFont = new NumericUpDown { Width = 90, Minimum = 6, Maximum = 48 };
+            var lblMaxChars = new Label { Text = "Max label chars:", AutoSize = true, Margin = new Padding(16, 7, 8, 0) };
+            _maxLabelChars = new NumericUpDown { Width = 90, Minimum = 10, Maximum = 200 };
 
-            _previewPanel = new Panel { Left = 10, Top = 80, Width = 360, Height = 60, BorderStyle = BorderStyle.FixedSingle };
+            numericGrid.Controls.Add(lblOcc, 0, 0);
+            numericGrid.Controls.Add(_occupancy, 1, 0);
+            numericGrid.Controls.Add(lblMin, 2, 0);
+            numericGrid.Controls.Add(_minFont, 3, 0);
+            numericGrid.Controls.Add(lblMax, 0, 1);
+            numericGrid.Controls.Add(_maxFont, 1, 1);
+            numericGrid.Controls.Add(lblMaxChars, 2, 1);
+            numericGrid.Controls.Add(_maxLabelChars, 3, 1);
+            root.Controls.Add(numericGrid, 0, 3);
+
+            _previewPanel = new Panel { Dock = DockStyle.Fill, Height = 80, BorderStyle = BorderStyle.FixedSingle, Margin = new Padding(0, 10, 0, 0) };
             _previewPanel.Paint += PreviewPanel_Paint;
-            Controls.Add(_previewPanel);
+            root.Controls.Add(_previewPanel, 0, 4);
 
-            var ok = new Button { Text = "OK", Left = 200, Width = 80, Top = 110, DialogResult = DialogResult.OK };
+            var buttonRow = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Bottom,
+                AutoSize = true,
+                FlowDirection = FlowDirection.RightToLeft,
+                WrapContents = false,
+                Margin = new Padding(0, 10, 0, 0)
+            };
+
+            var ok = new Button { Text = "OK", Width = 90, DialogResult = DialogResult.OK };
             ok.Click += Ok_Click;
-            Controls.Add(ok);
+            var cancel = new Button { Text = "Cancel", Width = 90, DialogResult = DialogResult.Cancel };
+            buttonRow.Controls.Add(cancel);
+            buttonRow.Controls.Add(ok);
+            root.Controls.Add(buttonRow, 0, 5);
 
-            var cancel = new Button { Text = "Cancel", Left = 290, Width = 80, Top = 110, DialogResult = DialogResult.Cancel };
-            Controls.Add(cancel);
+            AcceptButton = ok;
+            CancelButton = cancel;
 
             // load values
             if (string.Equals(_settings.Theme, "Light", StringComparison.OrdinalIgnoreCase))
@@ -142,7 +189,8 @@ namespace DiGraphLab
             // label
             using var sf = new StringFormat { LineAlignment = StringAlignment.Center, Alignment = StringAlignment.Near };
             using var font = new Font(FontFamily.GenericSansSerif, 9);
-            g.DrawString("Node preview", font, Brushes.White, new Rectangle(60, 10, 280, 40), sf);
+            var labelBrush = _light.Checked ? Brushes.Black : Brushes.White;
+            g.DrawString("Node preview", font, labelBrush, new Rectangle(60, 10, Math.Max(100, _previewPanel.Width - 70), 40), sf);
         }
     }
 }

@@ -11,6 +11,11 @@ public class Vertex
 
     public object? Data { get; set; }
 
+    // Arbitrary JSON-serializable metadata for the vertex. Consumers (e.g. Harmony)
+    // can store domain-specific annotations here; values are represented as
+    // System.Text.Json.JsonElement when deserialized from disk.
+    public System.Collections.Generic.Dictionary<string, System.Text.Json.JsonElement>? Metadata { get; set; }
+
     // Optional color expressed as HTML hex (e.g. "#RRGGBB") or named color. When null the UI should
     // pick a theme-appropriate default (e.g., opposite of the WinForms background).
     public string? Color { get; set; }

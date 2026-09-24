@@ -155,7 +155,8 @@ public class DirectedGraph
                 Id = v.Id,
                 Label = v.Label,
                 Color = v.Color,
-                Ordinal = v.Ordinal
+                Ordinal = v.Ordinal,
+                Metadata = v.Metadata is not null ? JsonSerializer.SerializeToElement(v.Metadata) : null
             }).ToList(),
             Edges = _edges.Values.Select(e => new EdgeDto
             {
@@ -474,7 +475,16 @@ public class DirectedGraph
             {
                 Color = v.Color
                 , Ordinal = v.Ordinal
+
             };
+            if (v.Metadata.HasValue)
+            {
+                try
+                {
+                    vertex.Metadata = JsonSerializer.Deserialize<Dictionary<string, System.Text.Json.JsonElement>>(v.Metadata.Value.GetRawText());
+                }
+                catch { }
+            }
             g.AddVertex(vertex);
             idToVertex[vertex.Id] = vertex;
         }
@@ -547,6 +557,7 @@ public class DirectedGraph
         public string? Label { get; set; }
         public string? Color { get; set; }
         public int Ordinal { get; set; }
+        public System.Text.Json.JsonElement? Metadata { get; set; }
     }
 
     private class EdgeDto

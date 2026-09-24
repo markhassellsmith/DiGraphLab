@@ -229,6 +229,32 @@ Algorithm results should ideally be **visualized on the graph**. For example, a 
 
 **Goal:** prove the visualization architecture.
 
+### Strategic Roadmap: Import / Export & Image Export (user-chosen)
+
+The user selected these import/export/image features and asked they be implemented in the following practical order. These will be developed as small commits and integrated into the UI toolbar/menus.
+
+- Matrix view:
+  - CSV import/export (dense adjacency with header labels; edge-list CSV)
+  - PNG export (render matrix snapshot)
+
+- Digraph view:
+  - JSON import/export (already implemented; full graph with layout and GUID preservation)
+  - CSV import/export (edge-list CSV and optional adjacency CSV)
+  - PNG export (render MSAGL viewer to PNG; include option to write a sidecar JSON file)
+
+Rationale and sequencing:
+- Start with quick wins (PNG export for the digraph view) to provide immediate user-value for reports and sharing.
+- Add matrix CSV import/export so matrix-based workflows and external analysis (spreadsheets, scripts) are supported.
+- Add matrix PNG snapshot export for documentation and slides.
+- Complete digraph CSV import/export to permit interchange with simple tools that accept edge lists.
+
+Implementation notes:
+- CSV import will map vertices by label (case-insensitive) and create missing vertices when needed. Full-graph JSON remains the canonical format for preserving GUIDs and layout.
+- Matrix CSV import will accept a dense N×N CSV with an optional header row/column of labels, or an edge-list CSV of index pairs or label pairs.
+- All image exports will offer a scale/ DPI option and an option to also save the current graph JSON alongside the image.
+
+This roadmap is recorded here and will be applied incrementally in the codebase.
+
 ### Interactive editing: current status & implementation notes
 
 - Current small-proof implementation (UI): sample graph rendering and a right-click-on-empty-space handler that creates a new vertex (auto-labeled). This lives in the WinForms project and keeps MSAGL code out of DiGraphLab.Core.
