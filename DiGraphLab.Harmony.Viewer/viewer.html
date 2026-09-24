@@ -3,7 +3,18 @@
 <head>
   <meta charset="utf-8" />
   <title>DiGraphLab Harmony Viewer</title>
-    <script type="text/javascript" src="assets/vis/vis-local.js"></script>
+    <script>
+      // Attempt to load a bundled vis-network first (if provided), otherwise fall back to local renderer.
+      (function(){
+        var script = document.createElement('script');
+        script.src = 'assets/vis/vis-network.min.js';
+        script.onload = function(){ console.log('vis-network loaded'); };
+        script.onerror = function(){
+          var s = document.createElement('script'); s.src = 'assets/vis/vis-local.js'; document.head.appendChild(s);
+        };
+        document.head.appendChild(script);
+      })();
+    </script>
   <link href="assets/vis/vis-local.css" rel="stylesheet" type="text/css" />
   <style>
     html, body { height: 100%; margin: 0; }
@@ -59,7 +70,7 @@
     }
 
     // support WebView2 posting JSON message
-    if (window.chrome && chrome.webview) {
+      if (window.chrome && chrome.webview) {
       chrome.webview.addEventListener('message', event => {
         try {
           const data = event.data;
@@ -79,6 +90,11 @@
       // fallback: look for a global variable "initialModel"
       if (window.initialModel) buildGraph(window.initialModel);
     }
+
+    // try enabling interactions (if local renderer provides it)
+    setTimeout(function(){ if (window.vis && window.vis.Network && typeof window.vis.Network.prototype.enableInteractions === 'function') {
+      // nothing, will be available on network instance
+    }}, 500);
   </script>
 </body>
 </html>

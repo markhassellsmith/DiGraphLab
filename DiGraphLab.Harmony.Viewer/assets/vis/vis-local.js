@@ -143,6 +143,42 @@
     }
   };
 
+  // Pan & zoom support: uses transform on group 'g'
+  Network.prototype.setTransform = function(tx, ty, scale){
+    this._tx = tx; this._ty = ty; this._scale = scale;
+    this.g.setAttribute('transform', 'translate(' + tx + ',' + ty + ') scale(' + scale + ')');
+  };
+
+  Network.prototype.enableInteractions = function(){
+    const self = this;
+    if (this._interactionsEnabled) return;
+    this._interactionsEnabled = true;
+    // initial transform
+    this._tx = 0; this._ty = 0; this._scale = 1;
+    // wheel zoom
+    this.container.addEventListener('wheel', function(ev){
+      ev.preventDefault();
+      const rect = self.container.getBoundingClientRect();
+      const mx = ev.clientX - rect.left; const my = ev.clientY - rect.top;
+      const delta = -ev.deltaY * 0.0015;
+      const newScale = Math.max(0.2, Math.min(3, self._scale * (1 + delta)));
+      // compute new translate to zoom around mouse
+      const sx = mx - self._tx; const sy = my - self._ty;
+      self._tx = mx - sx * (newScale / self._scale);
+      self._ty = my - sy * (newScale / self._scale);
+      self._scale = newScale;
+      self.setTransform(self._tx, self._ty, self._scale);
+    }, { passive: false });
+
+    // pan with middle mouse or right mouse
+    let panning = false; let start = {x:0,y:0};
+    this.container.addEventListener('pointerdown', function(ev){
+      if (ev.button === 1 || ev.button === 2){ panning = true; start.x = ev.clientX; start.y = ev.clientY; self.container.setPointerCapture(ev.pointerId); }
+    });
+    window.addEventListener('pointermove', function(ev){ if (!panning) return; const dx = ev.clientX - start.x; const dy = ev.clientY - start.y; start.x = ev.clientX; start.y = ev.clientY; self._tx += dx; self._ty += dy; self.setTransform(self._tx, self._ty, self._scale); });
+    window.addEventListener('pointerup', function(ev){ if (panning){ panning = false; try{ self.container.releasePointerCapture(ev.pointerId);}catch{} } });
+  };
+
   Network.prototype.render = function(){
     // update edges
     for(let e of this.edges){
@@ -159,13 +195,19 @@
       // update text in case label changed
       const txt = n._el.querySelector('text');
       if (txt) txt.textContent = n.label;
+      // highlight selected
+      if (this._selectedId === n.id) {
+        const rect = n._el.querySelector('rect');
+        if (rect) rect.setAttribute('stroke', '#ff8800');
+      } else {
+        const rect = n._el.querySelector('rect');
+        if (rect) rect.setAttribute('stroke', '#333');
+      }
     }
   };
 
   Network.prototype.on = function(evt, handler){
     if (evt === 'click'){
-      for(let id in this.nodeElements){}
-      // attach handler to existing node groups
       for(let n of this.nodes){ if (n._el) n._el._clickHandler = handler; }
     }
   };
