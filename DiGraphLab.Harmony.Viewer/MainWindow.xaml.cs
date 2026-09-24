@@ -69,6 +69,35 @@ namespace DiGraphLab.Harmony.Viewer
                     MessageBox.Show("Failed to post graph JSON to viewer: " + ex.Message);
                 }
             };
+            // send initial options based on current UI selections
+            SendViewerOptions();
+        }
+
+        private void NotationCombo_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+        {
+            SendViewerOptions();
+        }
+
+        private void KeyCombo_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+        {
+            SendViewerOptions();
+        }
+
+        private void SendViewerOptions()
+        {
+            if (_webViewControl?.CoreWebView2 == null) return;
+            try
+            {
+                var notationItem = NotationCombo.SelectedItem as System.Windows.Controls.ComboBoxItem;
+                var notation = notationItem?.Tag?.ToString() ?? "both";
+                var keyItem = KeyCombo.SelectedItem as System.Windows.Controls.ComboBoxItem;
+                int tonic = 0;
+                if (keyItem != null && int.TryParse(keyItem.Tag?.ToString() ?? "0", out var v)) tonic = v;
+                var opts = new { type = "options", notation = notation, tonicPc = tonic, preferSharps = true };
+                var json = System.Text.Json.JsonSerializer.Serialize(opts);
+                _webViewControl.CoreWebView2.PostWebMessageAsJson(json);
+            }
+            catch { }
         }
     }
 }

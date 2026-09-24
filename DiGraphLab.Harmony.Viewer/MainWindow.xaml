@@ -7,6 +7,27 @@
         <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="6">
             <Button x:Name="LoadDemoButton" Content="Load Demo" Width="100" Margin="4" Click="LoadDemoButton_Click" />
             <TextBlock VerticalAlignment="Center" Margin="8,0">Demo output folder will be created on your Desktop.</TextBlock>
+            <TextBlock VerticalAlignment="Center" Margin="12,0,4,0">Notation:</TextBlock>
+            <ComboBox x:Name="NotationCombo" Width="140" Margin="4" SelectionChanged="NotationCombo_SelectionChanged">
+                <ComboBoxItem Tag="traditional">Traditional</ComboBoxItem>
+                <ComboBoxItem Tag="nashville">Nashville</ComboBoxItem>
+                <ComboBoxItem Tag="both" IsSelected="True">Both</ComboBoxItem>
+            </ComboBox>
+            <TextBlock VerticalAlignment="Center" Margin="12,0,4,0">Key:</TextBlock>
+            <ComboBox x:Name="KeyCombo" Width="120" Margin="4" SelectionChanged="KeyCombo_SelectionChanged">
+                <ComboBoxItem Tag="0" IsSelected="True">C</ComboBoxItem>
+                <ComboBoxItem Tag="1">C# / Db</ComboBoxItem>
+                <ComboBoxItem Tag="2">D</ComboBoxItem>
+                <ComboBoxItem Tag="3">D# / Eb</ComboBoxItem>
+                <ComboBoxItem Tag="4">E</ComboBoxItem>
+                <ComboBoxItem Tag="5">F</ComboBoxItem>
+                <ComboBoxItem Tag="6">F# / Gb</ComboBoxItem>
+                <ComboBoxItem Tag="7">G</ComboBoxItem>
+                <ComboBoxItem Tag="8">G# / Ab</ComboBoxItem>
+                <ComboBoxItem Tag="9">A</ComboBoxItem>
+                <ComboBoxItem Tag="10">A# / Bb</ComboBoxItem>
+                <ComboBoxItem Tag="11">B</ComboBoxItem>
+            </ComboBox>
         </StackPanel>
         <Grid>
             <WebView2:WebView2 x:Name="WebView" />
