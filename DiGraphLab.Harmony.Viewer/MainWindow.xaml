@@ -1,7 +1,8 @@
 <Window x:Class="DiGraphLab.Harmony.Viewer.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:WebView2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
+        xmlns:local="clr-namespace:DiGraphLab.Harmony.Viewer"
+        xmlns:controls="clr-namespace:DiGraphLab.Harmony.Viewer.Controls"
         Title="DiGraphLab Harmony Viewer" Height="720" Width="1024">
     <DockPanel>
         <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="6">
@@ -34,7 +35,7 @@
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="360" />
             </Grid.ColumnDefinitions>
-            <WebView2:WebView2 x:Name="WebView" Grid.Column="0" />
+            <controls:GraphCanvas x:Name="GraphCanvasControl" Grid.Column="0" />
             <Border Grid.Column="1" BorderBrush="#DDD" BorderThickness="1" Background="#FFF">
                 <StackPanel Margin="8">
                     <TextBlock FontWeight="Bold" FontSize="14" Text="Inspector" Margin="0,0,0,8" />

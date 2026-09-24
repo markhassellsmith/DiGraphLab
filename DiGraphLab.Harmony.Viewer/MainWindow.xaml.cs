@@ -1,5 +1,3 @@
-using Microsoft.Web.WebView2.Core;
-using Microsoft.Web.WebView2.Wpf;
 using System;
 using System.IO;
 using System.Reflection;
@@ -7,35 +5,15 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using System.Windows;
 using DiGraphLab.Harmony;
+using DiGraphLab.Harmony.Viewer.Controls;
 
 namespace DiGraphLab.Harmony.Viewer
 {
     public partial class MainWindow : Window
     {
-        private WebView2? _webViewControl;
-
         public MainWindow()
         {
             InitializeComponent();
-            Loaded += MainWindow_Loaded;
-        }
-
-        private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
-        {
-            _webViewControl = WebView;
-            try
-            {
-                await _webViewControl.EnsureCoreWebView2Async();
-            }
-            catch (Exception)
-            {
-                // ignore; WebView2 may not be available in some environments
-            }
-            try
-            {
-                _webViewControl.CoreWebView2.WebMessageReceived += CoreWebView2_WebMessageReceived;
-            }
-            catch { }
         }
 
         private async void LoadDemoButton_Click(object sender, RoutedEventArgs e)
@@ -45,73 +23,33 @@ namespace DiGraphLab.Harmony.Viewer
             Directory.CreateDirectory(outDir);
             Demo.RunSample(outDir);
 
-            // read the exported JSON
-            var jsonPath = Path.Combine(outDir, "harmony-demo.json");
-            string json = File.Exists(jsonPath) ? File.ReadAllText(jsonPath) : "{}";
+            // load model via HarmonyService and GraphAdapter
+            var svc = new HarmonyService();
+            // recreate progression used in Demo
+            var tonic = 0;
+            var I = Chord.FromMajorDiatonic("I", tonic, 1, addSeventh: false);
+            var IV = Chord.FromMajorDiatonic("IV", tonic, 4, addSeventh: false);
+            var V7 = Chord.FromMajorDiatonic("V7", tonic, 5, addSeventh: true);
+            svc.AddProgression(new[] { I, IV, V7, I }, tonic, style: "demo");
 
-            // navigate to local viewer.html
-            var exeDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)!;
-            var viewerPath = Path.Combine(exeDir, "viewer.html");
-            if (!File.Exists(viewerPath))
+            var (nodes, edges) = GraphAdapter.Convert(svc.Graph, new ChordFormatter.Options { PreferSharps = true, IncludeBass = true });
+            GraphCanvasControl.LoadModel(nodes, edges);
+            // subscribe to node click events from GraphCanvas
+            GraphCanvasControl.NodeClicked += (trad, nash, quality, pcs) =>
             {
-                MessageBox.Show($"viewer.html not found at {viewerPath}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                return;
-            }
-
-            var uri = new Uri(viewerPath);
-            _webViewControl!.CoreWebView2.SetVirtualHostNameToFolderMapping("appassets.local", exeDir, CoreWebView2HostResourceAccessKind.Allow);
-            _webViewControl.CoreWebView2.Navigate("https://appassets.local/viewer.html");
-
-            // wait for navigation and then post the graph JSON
-            _webViewControl.CoreWebView2.NavigationCompleted += (_, __) =>
-            {
-                try
+                Dispatcher.Invoke(() =>
                 {
-                    _webViewControl.CoreWebView2.PostWebMessageAsJson(json);
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show("Failed to post graph JSON to viewer: " + ex.Message);
-                }
+                    TraditionalText.Text = trad;
+                    NashvilleText.Text = nash;
+                    QualityText.Text = quality;
+                    PitchClassesText.Text = pcs != null ? string.Join(", ", pcs) : "-";
+                });
             };
-            // send initial options based on current UI selections
+            // apply initial options
             SendViewerOptions();
         }
 
-        private void CoreWebView2_WebMessageReceived(object? sender, Microsoft.Web.WebView2.Core.CoreWebView2WebMessageReceivedEventArgs e)
-        {
-            try
-            {
-                var json = e.WebMessageAsJson;
-                var doc = System.Text.Json.JsonDocument.Parse(json);
-                if (doc.RootElement.TryGetProperty("type", out var typeEl))
-                {
-                    var t = typeEl.GetString();
-                    if (t == "nodeClick")
-                    {
-                        var node = doc.RootElement.GetProperty("node");
-                        var rep = node.GetProperty("Representative");
-                        var trad = rep.GetProperty("Traditional").GetString() ?? "-";
-                        var nash = rep.GetProperty("Nashville").GetString() ?? "-";
-                        var quality = rep.GetProperty("Quality").GetString() ?? "-";
-                        string pcs = "-";
-                        if (rep.TryGetProperty("PitchClasses", out var pcsEl) && pcsEl.ValueKind == System.Text.Json.JsonValueKind.Array)
-                        {
-                            var arr = pcsEl.EnumerateArray();
-                            pcs = string.Join(", ", arr.Select(x => x.GetInt32().ToString()));
-                        }
-                        Dispatcher.Invoke(() =>
-                        {
-                            TraditionalText.Text = trad;
-                            NashvilleText.Text = nash;
-                            QualityText.Text = quality;
-                            PitchClassesText.Text = pcs;
-                        });
-                    }
-                }
-            }
-            catch { }
-        }
+        // receive node click events from native canvas by wiring selection in code (handled below via GraphCanvas events if needed)
 
         private void PlayButton_Click(object sender, RoutedEventArgs e)
         {
@@ -130,7 +68,6 @@ namespace DiGraphLab.Harmony.Viewer
 
         private void SendViewerOptions()
         {
-            if (_webViewControl?.CoreWebView2 == null) return;
             try
             {
                 var notationItem = NotationCombo.SelectedItem as System.Windows.Controls.ComboBoxItem;
@@ -138,9 +75,8 @@ namespace DiGraphLab.Harmony.Viewer
                 var keyItem = KeyCombo.SelectedItem as System.Windows.Controls.ComboBoxItem;
                 int tonic = 0;
                 if (keyItem != null && int.TryParse(keyItem.Tag?.ToString() ?? "0", out var v)) tonic = v;
-                var opts = new { type = "options", notation = notation, tonicPc = tonic, preferSharps = true };
-                var json = System.Text.Json.JsonSerializer.Serialize(opts);
-                _webViewControl.CoreWebView2.PostWebMessageAsJson(json);
+                // apply to native canvas
+                GraphCanvasControl.ApplyOptions(notation, tonic, preferSharps: true);
             }
             catch { }
         }

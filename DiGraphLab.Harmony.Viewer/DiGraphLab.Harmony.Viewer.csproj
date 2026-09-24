@@ -13,7 +13,7 @@
   </ItemGroup>
 
   <ItemGroup>
-	<PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4191.47" />
+	<!-- Removed WebView2 to produce a standalone WPF viewer with no external runtime dependencies -->
   </ItemGroup>
 
   <ItemGroup>
