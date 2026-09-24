@@ -31,6 +31,11 @@ namespace DiGraphLab.Harmony.Viewer
             {
                 // ignore; WebView2 may not be available in some environments
             }
+            try
+            {
+                _webViewControl.CoreWebView2.WebMessageReceived += CoreWebView2_WebMessageReceived;
+            }
+            catch { }
         }
 
         private async void LoadDemoButton_Click(object sender, RoutedEventArgs e)
@@ -71,6 +76,46 @@ namespace DiGraphLab.Harmony.Viewer
             };
             // send initial options based on current UI selections
             SendViewerOptions();
+        }
+
+        private void CoreWebView2_WebMessageReceived(object? sender, Microsoft.Web.WebView2.Core.CoreWebView2WebMessageReceivedEventArgs e)
+        {
+            try
+            {
+                var json = e.WebMessageAsJson;
+                var doc = System.Text.Json.JsonDocument.Parse(json);
+                if (doc.RootElement.TryGetProperty("type", out var typeEl))
+                {
+                    var t = typeEl.GetString();
+                    if (t == "nodeClick")
+                    {
+                        var node = doc.RootElement.GetProperty("node");
+                        var rep = node.GetProperty("Representative");
+                        var trad = rep.GetProperty("Traditional").GetString() ?? "-";
+                        var nash = rep.GetProperty("Nashville").GetString() ?? "-";
+                        var quality = rep.GetProperty("Quality").GetString() ?? "-";
+                        string pcs = "-";
+                        if (rep.TryGetProperty("PitchClasses", out var pcsEl) && pcsEl.ValueKind == System.Text.Json.JsonValueKind.Array)
+                        {
+                            var arr = pcsEl.EnumerateArray();
+                            pcs = string.Join(", ", arr.Select(x => x.GetInt32().ToString()));
+                        }
+                        Dispatcher.Invoke(() =>
+                        {
+                            TraditionalText.Text = trad;
+                            NashvilleText.Text = nash;
+                            QualityText.Text = quality;
+                            PitchClassesText.Text = pcs;
+                        });
+                    }
+                }
+            }
+            catch { }
+        }
+
+        private void PlayButton_Click(object sender, RoutedEventArgs e)
+        {
+            MessageBox.Show("Playback not implemented in demo.");
         }
 
         private void NotationCombo_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)

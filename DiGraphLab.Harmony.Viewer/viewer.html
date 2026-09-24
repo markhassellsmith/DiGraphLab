@@ -47,8 +47,9 @@
           const node = model.Nodes.find(n => n.Id === id);
           if (node) {
             // send to host
-            if (window.chrome && chrome.webview && chrome.webview.postMessage) {
-              chrome.webview.postMessage({ type: 'nodeClick', id: id, node: node });
+            const hostWebView = window.chrome && window.chrome.webview;
+            if (hostWebView && typeof hostWebView.postMessage === 'function') {
+              hostWebView.postMessage({ type: 'nodeClick', id: id, node: node });
             } else {
               alert('Node: ' + id + '\n' + 'Traditional: ' + node.Representative.Traditional + '\n' + 'Nashville: ' + node.Representative.Nashville + '\n' + 'Quality: ' + node.Representative.Quality + '\n' + 'PitchClasses: ' + node.Representative.PitchClasses.join(', '));
             }

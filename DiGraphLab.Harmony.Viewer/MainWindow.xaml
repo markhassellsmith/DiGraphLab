@@ -30,7 +30,25 @@
             </ComboBox>
         </StackPanel>
         <Grid>
-            <WebView2:WebView2 x:Name="WebView" />
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="360" />
+            </Grid.ColumnDefinitions>
+            <WebView2:WebView2 x:Name="WebView" Grid.Column="0" />
+            <Border Grid.Column="1" BorderBrush="#DDD" BorderThickness="1" Background="#FFF">
+                <StackPanel Margin="8">
+                    <TextBlock FontWeight="Bold" FontSize="14" Text="Inspector" Margin="0,0,0,8" />
+                    <TextBlock Text="Traditional:" FontWeight="SemiBold" />
+                    <TextBlock x:Name="TraditionalText" Text="-" TextWrapping="Wrap" Margin="0,0,0,8" />
+                    <TextBlock Text="Nashville:" FontWeight="SemiBold" />
+                    <TextBlock x:Name="NashvilleText" Text="-" TextWrapping="Wrap" Margin="0,0,0,8" />
+                    <TextBlock Text="Quality:" FontWeight="SemiBold" />
+                    <TextBlock x:Name="QualityText" Text="-" Margin="0,0,0,8" />
+                    <TextBlock Text="Pitch Classes:" FontWeight="SemiBold" />
+                    <TextBlock x:Name="PitchClassesText" Text="-" Margin="0,0,0,8" />
+                    <Button x:Name="PlayButton" Content="Play (not implemented)" Width="140" Margin="0,8,0,0" Click="PlayButton_Click" />
+                </StackPanel>
+            </Border>
         </Grid>
     </DockPanel>
 </Window>
