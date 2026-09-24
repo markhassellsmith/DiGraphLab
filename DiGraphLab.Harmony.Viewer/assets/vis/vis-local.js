@@ -1,81 +1,176 @@
+/*
+  Simple force-directed renderer for the viewer.
+  Provides basic physics, dragging and click events without external libraries so the app works offline.
+*/
 (function(window){
-  // Minimal local vis-like network renderer for demo purposes
+  function rand(min,max){ return min + Math.random()*(max-min); }
+
   function Network(container, data, options){
     this.container = container;
-    this.nodes = data.nodes || [];
-    this.edges = data.edges || [];
+    this.rawNodes = (data.nodes || []).map(n=>Object.assign({}, n));
+    this.rawEdges = (data.edges || []).map(e=>Object.assign({}, e));
     this.handlers = {};
-    // create svg
+    this.width = container.clientWidth || 800;
+    this.height = container.clientHeight || 600;
     this.svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
     this.svg.setAttribute('width','100%');
     this.svg.setAttribute('height','100%');
+    this.svg.style.touchAction = 'none';
     while (container.firstChild) container.removeChild(container.firstChild);
     container.appendChild(this.svg);
-    // render simple circular layout
-    this.render = function(){
-      while (this.svg.firstChild) this.svg.removeChild(this.svg.firstChild);
-      var w = container.clientWidth, h = container.clientHeight;
-      var cx = w/2, cy = h/2, r = Math.min(w,h)/3;
-      var n = this.nodes.length;
-      this.nodeElements = {};
-      for(var i=0;i<n;i++){
-        var node = this.nodes[i];
-        var angle = (i / n) * Math.PI * 2;
-        var x = cx + r * Math.cos(angle);
-        var y = cy + r * Math.sin(angle);
-        // draw edge lines later
-        node._x = x; node._y = y;
-      }
-      // draw edges
-      for(var e of this.edges){
-        var from = this.nodes.find(x=>x.id==e.from);
-        var to = this.nodes.find(x=>x.id==e.to);
-        if (!from || !to) continue;
-        var line = document.createElementNS('http://www.w3.org/2000/svg','line');
-        line.setAttribute('x1',from._x); line.setAttribute('y1',from._y);
-        line.setAttribute('x2',to._x); line.setAttribute('y2',to._y);
-        line.setAttribute('stroke','#999'); line.setAttribute('stroke-width','1.5');
-        this.svg.appendChild(line);
-      }
-      // draw nodes as groups
-      for(var i=0;i<n;i++){
-        var node = this.nodes[i];
-        var g = document.createElementNS('http://www.w3.org/2000/svg','g');
-        g.setAttribute('transform','translate('+node._x+','+node._y+')');
-        var rect = document.createElementNS('http://www.w3.org/2000/svg','rect');
-        rect.setAttribute('x',-40); rect.setAttribute('y',-18); rect.setAttribute('width',80); rect.setAttribute('height',36);
-        rect.setAttribute('rx',6); rect.setAttribute('fill','#fff'); rect.setAttribute('stroke','#333');
-        var text = document.createElementNS('http://www.w3.org/2000/svg','text');
-        text.setAttribute('x',0); text.setAttribute('y',5); text.setAttribute('text-anchor','middle');
-        text.setAttribute('font-size','10'); text.textContent = node.label;
-        g.appendChild(rect); g.appendChild(text);
-        (function(id, nodeObj){
-          g.addEventListener('click', function(ev){
-            if (this._clickHandler) this._clickHandler({nodes:[id]});
-            ev.stopPropagation();
-          });
-        })(node.id, node);
-        this.svg.appendChild(g);
-        this.nodeElements[node.id] = g;
-      }
+
+    // initialize nodes with positions and velocities
+    this.nodes = this.rawNodes.map((n,i)=>({
+      id: n.id,
+      label: n.label,
+      rep: n.rep,
+      x: rand(this.width*0.2,this.width*0.8),
+      y: rand(this.height*0.2,this.height*0.8),
+      vx: 0, vy: 0,
+      mass: 1,
+      fx:0, fy:0
+    }));
+    this.edges = this.rawEdges.map(e=>({from: e.from, to: e.to}));
+
+    this.nodeMap = {};
+    this.nodes.forEach(n=>this.nodeMap[n.id]=n);
+
+    this.g = document.createElementNS('http://www.w3.org/2000/svg','g');
+    this.svg.appendChild(this.g);
+
+    this.edgeLayer = document.createElementNS('http://www.w3.org/2000/svg','g');
+    this.nodeLayer = document.createElementNS('http://www.w3.org/2000/svg','g');
+    this.g.appendChild(this.edgeLayer);
+    this.g.appendChild(this.nodeLayer);
+
+    this.nodeElements = {};
+
+    const self = this;
+    // build elements
+    for(let e of this.edges){
+      const line = document.createElementNS('http://www.w3.org/2000/svg','line');
+      line.setAttribute('stroke','#aaa'); line.setAttribute('stroke-width','1.2');
+      this.edgeLayer.appendChild(line);
+      e._el = line;
+    }
+
+    for(let n of this.nodes){
+      const g = document.createElementNS('http://www.w3.org/2000/svg','g');
+      const rect = document.createElementNS('http://www.w3.org/2000/svg','rect');
+      rect.setAttribute('x',-50); rect.setAttribute('y',-18); rect.setAttribute('width',100); rect.setAttribute('height',36);
+      rect.setAttribute('rx',6); rect.setAttribute('fill','#fff'); rect.setAttribute('stroke','#333');
+      const text = document.createElementNS('http://www.w3.org/2000/svg','text');
+      text.setAttribute('x',0); text.setAttribute('y',5); text.setAttribute('text-anchor','middle'); text.setAttribute('font-size','11');
+      text.textContent = n.label;
+      g.appendChild(rect); g.appendChild(text);
+      this.nodeLayer.appendChild(g);
+      n._el = g;
+      // events
+      (function(id){
+        let dragging = false;
+        let offset = {x:0,y:0};
+        g.addEventListener('pointerdown', function(ev){
+          g.setPointerCapture(ev.pointerId);
+          dragging = true;
+          offset.x = n.x - ev.clientX;
+          offset.y = n.y - ev.clientY;
+        });
+        window.addEventListener('pointermove', function(ev){
+          if (!dragging) return;
+          n.x = ev.clientX + offset.x;
+          n.y = ev.clientY + offset.y;
+          n.vx = 0; n.vy = 0;
+        });
+        window.addEventListener('pointerup', function(ev){
+          if (dragging){ dragging = false; try{ g.releasePointerCapture(ev.pointerId);}catch{} }
+        });
+        g.addEventListener('click', function(ev){ ev.stopPropagation(); if (g._clickHandler) g._clickHandler({nodes:[id]}); });
+      })(n.id);
+    }
+
+    // simulation parameters
+    this.alpha = 0.1;
+    this.repulsion = 4000; // strength
+    this.springK = 0.02;
+    this.damping = 0.85;
+
+    this.running = true;
+    const step = ()=>{
+      if (!self.running) return;
+      self.simulate();
+      self.render();
+      requestAnimationFrame(step);
     };
-    var self = this;
-    // initial render
-    setTimeout(function(){ self.render(); }, 10);
+    requestAnimationFrame(step);
   }
-  Network.prototype.on = function(evt, handler){
-    if (evt === 'click'){
-      // store handler and attach to node groups
-      this.handlers.click = handler;
-      for(var id in this.nodeElements){
-        var el = this.nodeElements[id];
-        el._clickHandler = handler;
+
+  Network.prototype.simulate = function(){
+    // reset forces
+    for(let n of this.nodes){ n.fx = 0; n.fy = 0; }
+    // repulsion
+    for(let i=0;i<this.nodes.length;i++){
+      for(let j=i+1;j<this.nodes.length;j++){
+        const a=this.nodes[i], b=this.nodes[j];
+        let dx = a.x - b.x, dy = a.y - b.y;
+        let dist2 = dx*dx + dy*dy + 0.01;
+        let dist = Math.sqrt(dist2);
+        let force = this.repulsion / dist2;
+        let fx = (dx/dist) * force, fy = (dy/dist) * force;
+        a.fx += fx; a.fy += fy; b.fx -= fx; b.fy -= fy;
       }
     }
+    // springs
+    for(let e of this.edges){
+      const a = this.nodeMap[e.from];
+      const b = this.nodeMap[e.to];
+      if (!a || !b) continue;
+      let dx = b.x - a.x, dy = b.y - a.y;
+      let dist = Math.sqrt(dx*dx + dy*dy) || 1;
+      let desired = 120; // rest length
+      let k = this.springK;
+      let fs = k * (dist - desired);
+      let fx = (dx/dist) * fs, fy = (dy/dist) * fs;
+      a.fx += fx; a.fy += fy; b.fx -= fx; b.fy -= fy;
+    }
+    // integrate
+    for(let n of this.nodes){
+      n.vx = (n.vx + n.fx * this.alpha) * this.damping;
+      n.vy = (n.vy + n.fy * this.alpha) * this.damping;
+      n.x += n.vx; n.y += n.vy;
+      // bounds
+      n.x = Math.max(20, Math.min(this.container.clientWidth-20, n.x));
+      n.y = Math.max(20, Math.min(this.container.clientHeight-20, n.y));
+    }
   };
-  Network.prototype.destroy = function(){
-    if (this.svg && this.svg.parentNode) this.svg.parentNode.removeChild(this.svg);
-    this.svg = null;
+
+  Network.prototype.render = function(){
+    // update edges
+    for(let e of this.edges){
+      const a = this.nodeMap[e.from];
+      const b = this.nodeMap[e.to];
+      if (!a || !b || !e._el) continue;
+      e._el.setAttribute('x1', a.x); e._el.setAttribute('y1', a.y);
+      e._el.setAttribute('x2', b.x); e._el.setAttribute('y2', b.y);
+    }
+    // update nodes
+    for(let n of this.nodes){
+      if (!n._el) continue;
+      n._el.setAttribute('transform','translate('+n.x+','+n.y+')');
+      // update text in case label changed
+      const txt = n._el.querySelector('text');
+      if (txt) txt.textContent = n.label;
+    }
   };
+
+  Network.prototype.on = function(evt, handler){
+    if (evt === 'click'){
+      for(let id in this.nodeElements){}
+      // attach handler to existing node groups
+      for(let n of this.nodes){ if (n._el) n._el._clickHandler = handler; }
+    }
+  };
+
+  Network.prototype.destroy = function(){ this.running = false; if (this.svg && this.svg.parentNode) this.svg.parentNode.removeChild(this.svg); this.svg = null; };
+
   window.vis = { Network: Network };
 })(window);
