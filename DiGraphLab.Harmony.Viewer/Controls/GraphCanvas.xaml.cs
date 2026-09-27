@@ -27,6 +27,43 @@ namespace DiGraphLab.Harmony.Viewer.Controls
             SizeChanged += (_, __) => ResetBounds();
         }
 
+        // allow external callers to highlight/select nodes by id (used by matrix window)
+        public void HighlightNodes(params string[] ids)
+        {
+            try
+            {
+                ClearSelection();
+                Node? first = null;
+                foreach (var id in ids.Where(x => !string.IsNullOrEmpty(x)))
+                {
+                    var n = _nodes.FirstOrDefault(x => x.Id == id);
+                    if (n == null) continue;
+                    _selectedIds.Add(n.Id);
+                    if (n.Element is Canvas g)
+                    {
+                        var rect = g.Children.OfType<Rectangle>().FirstOrDefault();
+                        if (rect != null) rect.Stroke = Brushes.OrangeRed;
+                    }
+                    if (first == null) first = n;
+                }
+                if (first != null) HighlightNode(first);
+            }
+            catch { }
+        }
+
+        // panning state
+        private bool _isPanning = false;
+        private Point _panStart;
+        private double _panStartX, _panStartY;
+        // selection-zoom state (Ctrl+Left-Drag)
+        private bool _isSelecting = false;
+        private Point _selectionStart;
+        private Rectangle? _selectionRect;
+
+        // zoom/translate state
+        private double _zoom = 1.0;
+        private const double ZoomStep = 1.15;
+
         private void ResetBounds()
         {
             // ensure nodes remain within bounds
@@ -49,6 +86,10 @@ namespace DiGraphLab.Harmony.Viewer.Controls
                 Nashville = n.NashvilleLabel,
                 Quality = n.Quality,
                 PitchClasses = n.PitchClasses.ToArray(),
+                RootPc = n.RootPc,
+                Inversion = n.Inversion,
+                Count = n.Count,
+                Styles = n.Styles ?? Array.Empty<string>(),
                 X = _rand.NextDouble() * Math.Max(100, PART_Canvas.ActualWidth - 200) + 100,
                 Y = _rand.NextDouble() * Math.Max(100, PART_Canvas.ActualHeight - 200) + 100
             }).ToList();
@@ -66,7 +107,9 @@ namespace DiGraphLab.Harmony.Viewer.Controls
             foreach (var n in _nodes)
             {
                 var g = new Canvas { Width = 120, Height = 36, RenderTransformOrigin = new Point(0.5, 0.5) };
-                var rect = new Rectangle { Width = 120, Height = 36, RadiusX = 6, RadiusY = 6, Fill = Brushes.White, Stroke = Brushes.DarkSlateGray };
+                // color by normalized quality key if available, otherwise fall back to Quality text
+                var fill = GetBrushForQuality(n.Quality, n.Styles.FirstOrDefault() ?? n.Quality);
+                var rect = new Rectangle { Width = 120, Height = 36, RadiusX = 6, RadiusY = 6, Fill = fill, Stroke = Brushes.DarkSlateGray, StrokeThickness = 1.2 };
                 var txt = new TextBlock { Text = n.Label, TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center, Width = 110 };
                 Canvas.SetLeft(txt, 5); Canvas.SetTop(txt, 6);
                 g.Children.Add(rect); g.Children.Add(txt);
@@ -81,19 +124,281 @@ namespace DiGraphLab.Harmony.Viewer.Controls
                     // treat as click if it was not a drag movement
                     if (!wasDragging)
                     {
+                        HighlightNode(n);
                         OnNodeClicked(n);
                     }
                 };
+                // allow right-button drag on nodes to pan the whole canvas
+                g.MouseRightButtonDown += (s, e) => { _isPanning = true; _panStart = e.GetPosition(this); _panStartX = PART_Translate.X; _panStartY = PART_Translate.Y; g.CaptureMouse(); };
+                g.MouseRightButtonUp += (s, e) => { _isPanning = false; try { g.ReleaseMouseCapture(); } catch { } };
+                g.MouseMove += (s, e) => { if (!_isPanning) return; var p = e.GetPosition(this); PART_Translate.X = _panStartX + (p.X - _panStart.X); PART_Translate.Y = _panStartY + (p.Y - _panStart.Y); };
+            }
+
+            // apply current zoom
+            ApplyZoomTransform();
+        }
+
+        private void HighlightNode(Node n)
+        {
+            // clear previous highlights
+            foreach (var node in _nodes)
+            {
+                if (node.Element is Canvas g)
+                {
+                    var rect = g.Children.OfType<Rectangle>().FirstOrDefault();
+                    if (rect != null) rect.StrokeThickness = 1.2;
+                    g.RenderTransform = null;
+                    Panel.SetZIndex(g, 0);
+                    g.Effect = null;
+                }
+            }
+            // highlight this one
+            if (n.Element is Canvas gg)
+            {
+                var rect = gg.Children.OfType<Rectangle>().FirstOrDefault();
+                if (rect != null) rect.StrokeThickness = 3.0;
+                gg.RenderTransform = new ScaleTransform(1.06, 1.06);
+                // elevate and add subtle shadow
+                Panel.SetZIndex(gg, 10);
+                gg.Effect = new System.Windows.Media.Effects.DropShadowEffect { Color = Colors.Black, BlurRadius = 8, Opacity = 0.4, Direction = 270, ShadowDepth = 4 };
             }
         }
 
-        public event Action<string, string, string, int[]>? NodeClicked;
+        // multi-selection support (Shift+Click to add/remove)
+        private readonly List<string> _selectedIds = new();
+        public IReadOnlyList<string> SelectedNodeIds => _selectedIds;
+
+        public void ClearSelection()
+        {
+            _selectedIds.Clear();
+            // clear visual selection markers
+            foreach (var node in _nodes)
+            {
+                if (node.Element is Canvas g)
+                {
+                    var rect = g.Children.OfType<Rectangle>().FirstOrDefault();
+                    if (rect != null) rect.Stroke = Brushes.DarkSlateGray;
+                }
+            }
+        }
+
+        private void ToggleSelectNode(Node n)
+        {
+            if (_selectedIds.Contains(n.Id))
+            {
+                _selectedIds.Remove(n.Id);
+                if (n.Element is Canvas g) { var rect = g.Children.OfType<Rectangle>().FirstOrDefault(); if (rect != null) rect.Stroke = Brushes.DarkSlateGray; }
+            }
+            else
+            {
+                _selectedIds.Add(n.Id);
+                if (n.Element is Canvas g) { var rect = g.Children.OfType<Rectangle>().FirstOrDefault(); if (rect != null) rect.Stroke = Brushes.OrangeRed; }
+            }
+        }
+
+        private Brush GetBrushForQuality(string q, string fallback)
+        {
+            var key = (q ?? string.Empty).ToLowerInvariant();
+            if (string.IsNullOrWhiteSpace(key)) key = (fallback ?? string.Empty).ToLowerInvariant();
+            return key switch
+            {
+                var k when k.Contains("maj") || k == "maj" => Brushes.LightSteelBlue,
+                var k when k.Contains("min") || k == "min" => Brushes.LightSalmon,
+                var k when k.Contains("dim") || k == "dim" => Brushes.LightGray,
+                var k when k.Contains("aug") || k == "aug" => Brushes.LightGoldenrodYellow,
+                var k when k.Contains("7") || k == "7" => Brushes.MediumPurple,
+                _ => Brushes.White,
+            };
+        }
+
+        // handle mouse wheel for zoom (on the control)
+        protected override void OnMouseWheel(System.Windows.Input.MouseWheelEventArgs e)
+        {
+            base.OnMouseWheel(e);
+            try
+            {
+                var pos = e.GetPosition(this);
+                if (e.Delta > 0) SetZoom(_zoom * ZoomStep, pos);
+                else SetZoom(_zoom / ZoomStep, pos);
+                e.Handled = true;
+            }
+            catch { }
+        }
+
+        protected override void OnPreviewMouseLeftButtonDown(System.Windows.Input.MouseButtonEventArgs e)
+        {
+            base.OnPreviewMouseLeftButtonDown(e);
+            // start selection-zoom when Ctrl is held and left button is pressed
+            try
+            {
+                if ((System.Windows.Input.Keyboard.Modifiers & System.Windows.Input.ModifierKeys.Control) != 0)
+                {
+                    _isSelecting = true;
+                    _selectionStart = e.GetPosition(this);
+                    if (_selectionRect == null)
+                    {
+                        _selectionRect = new Rectangle { Stroke = Brushes.Black, StrokeThickness = 1.2, StrokeDashArray = new DoubleCollection { 4, 2 }, Fill = new SolidColorBrush(Color.FromArgb(40, 0, 0, 0)) };
+                        Panel.SetZIndex(_selectionRect, 1000);
+                        PART_Container.Children.Add(_selectionRect);
+                    }
+                    Canvas.SetLeft(_selectionRect, _selectionStart.X);
+                    Canvas.SetTop(_selectionRect, _selectionStart.Y);
+                    _selectionRect.Width = 0; _selectionRect.Height = 0;
+                    CaptureMouse();
+                    e.Handled = true;
+                }
+            }
+            catch { }
+        }
+
+        protected override void OnPreviewMouseMove(System.Windows.Input.MouseEventArgs e)
+        {
+            base.OnPreviewMouseMove(e);
+            try
+            {
+                if (_isSelecting && _selectionRect != null)
+                {
+                    var pt = e.GetPosition(this);
+                    var x = Math.Min(pt.X, _selectionStart.X);
+                    var y = Math.Min(pt.Y, _selectionStart.Y);
+                    var w = Math.Abs(pt.X - _selectionStart.X);
+                    var h = Math.Abs(pt.Y - _selectionStart.Y);
+                    Canvas.SetLeft(_selectionRect, x);
+                    Canvas.SetTop(_selectionRect, y);
+                    _selectionRect.Width = w; _selectionRect.Height = h;
+                    e.Handled = true;
+                }
+            }
+            catch { }
+        }
+
+        protected override void OnPreviewMouseLeftButtonUp(System.Windows.Input.MouseButtonEventArgs e)
+        {
+            base.OnPreviewMouseLeftButtonUp(e);
+            try
+            {
+                if (_isSelecting && _selectionRect != null)
+                {
+                    var rectLeft = Canvas.GetLeft(_selectionRect);
+                    var rectTop = Canvas.GetTop(_selectionRect);
+                    var rectW = _selectionRect.Width;
+                    var rectH = _selectionRect.Height;
+                    // remove visual
+                    try { PART_Container.Children.Remove(_selectionRect); } catch { }
+                    _selectionRect = null;
+                    _isSelecting = false;
+                    ReleaseMouseCapture();
+                    // only zoom if selection is large enough
+                    if (rectW > 8 && rectH > 8)
+                    {
+                        ZoomToRectangle(new Rect(rectLeft, rectTop, rectW, rectH));
+                    }
+                    e.Handled = true;
+                }
+            }
+            catch { }
+        }
+
+        private void ZoomToRectangle(Rect screenRect)
+        {
+            try
+            {
+                // ensure we have valid view size
+                var viewW = PART_Canvas.ActualWidth; var viewH = PART_Canvas.ActualHeight;
+                if (viewW <= 0 || viewH <= 0) return;
+                var rectW = screenRect.Width; var rectH = screenRect.Height;
+                if (rectW <= 4 || rectH <= 4) return;
+                var sOld = _zoom;
+                var scaleFactor = Math.Min(viewW / rectW, viewH / rectH);
+                var sNew = sOld * scaleFactor;
+                sNew = Math.Max(0.1, Math.Min(4.0, sNew));
+                // compute center in screen coords
+                var cx = screenRect.Left + screenRect.Width / 2.0;
+                var cy = screenRect.Top + screenRect.Height / 2.0;
+                // content center in content coords
+                var contentCx = (cx - PART_Translate.X) / sOld;
+                var contentCy = (cy - PART_Translate.Y) / sOld;
+                // new translate so content center maps to view center
+                var newTx = (viewW / 2.0) - contentCx * sNew;
+                var newTy = (viewH / 2.0) - contentCy * sNew;
+                _zoom = sNew;
+                ApplyZoomTransform();
+                PART_Translate.X = newTx; PART_Translate.Y = newTy;
+                try { ZoomChanged?.Invoke(_zoom); } catch { }
+            }
+            catch { }
+        }
+
+        // Zoom / Fit methods
+
+        public event Action<double>? ZoomChanged;
+
+        public double CurrentZoom => _zoom;
+
+        public void SetZoom(double scale) => SetZoom(scale, null);
+
+        public void ZoomIn() => SetZoom(_zoom * ZoomStep, null);
+        public void ZoomOut() => SetZoom(_zoom / ZoomStep, null);
+
+        private void SetZoom(double scale, Point? center)
+        {
+            var old = _zoom;
+            scale = Math.Max(0.1, Math.Min(4.0, scale));
+            if (center != null && PART_Translate != null)
+            {
+                // adjust translation so the point under 'center' remains fixed (screen = scale * content + translate)
+                try
+                {
+                    var sOld = old;
+                    var sNew = scale;
+                    if (sOld <= 0) sOld = 1.0;
+                    var cx = center.Value.X; var cy = center.Value.Y;
+                    var tx = PART_Translate.X; var ty = PART_Translate.Y;
+                    var factor = sNew / sOld;
+                    var newTx = cx - factor * (cx - tx);
+                    var newTy = cy - factor * (cy - ty);
+                    PART_Translate.X = newTx; PART_Translate.Y = newTy;
+                }
+                catch { }
+            }
+            _zoom = scale;
+            ApplyZoomTransform();
+            try { ZoomChanged?.Invoke(_zoom); } catch { }
+        }
+
+        private void ApplyZoomTransform()
+        {
+            if (PART_Scale != null) { PART_Scale.ScaleX = _zoom; PART_Scale.ScaleY = _zoom; }
+        }
+
+        public void FitToView()
+        {
+            if (_nodes == null || _nodes.Count == 0) { SetZoom(1.0); PART_Translate.X = 0; PART_Translate.Y = 0; return; }
+            double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
+            foreach (var n in _nodes)
+            {
+                minX = Math.Min(minX, n.X - 80); maxX = Math.Max(maxX, n.X + 80);
+                minY = Math.Min(minY, n.Y - 30); maxY = Math.Max(maxY, n.Y + 30);
+            }
+            var contentW = maxX - minX; var contentH = maxY - minY;
+            var viewW = PART_Canvas.ActualWidth; var viewH = PART_Canvas.ActualHeight;
+            if (viewW <= 0 || viewH <= 0) return;
+            var scaleX = viewW / (contentW + 40); var scaleY = viewH / (contentH + 40);
+            var targetScale = Math.Min(Math.Min(scaleX, scaleY), 2.5);
+            SetZoom(Math.Max(0.3, targetScale));
+            // center
+            var centerX = (minX + maxX) / 2.0; var centerY = (minY + maxY) / 2.0;
+            PART_Translate.X = (viewW / 2.0) - centerX * _zoom;
+            PART_Translate.Y = (viewH / 2.0) - centerY * _zoom;
+        }
+
+        public event Action<string, string, string, int[], int, int>? NodeClicked;
 
         private void OnNodeClicked(Node n)
         {
             try
             {
-                NodeClicked?.Invoke(n.Traditional, n.Nashville, n.Quality, n.PitchClasses);
+                NodeClicked?.Invoke(n.Traditional, n.Nashville, n.Quality, n.PitchClasses, n.RootPc, n.Inversion);
             }
             catch { }
         }
@@ -192,6 +497,10 @@ namespace DiGraphLab.Harmony.Viewer.Controls
             public string Traditional = string.Empty;
             public string Nashville = string.Empty;
             public string Quality = string.Empty;
+            public int RootPc = 0;
+            public int Inversion = 0;
+            public int Count = 0;
+            public string[] Styles = Array.Empty<string>();
             public int[] PitchClasses = Array.Empty<int>();
             public double X, Y, Vx, Vy, Fx, Fy;
             public FrameworkElement? Element;

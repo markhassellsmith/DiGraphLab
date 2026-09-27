@@ -13,7 +13,8 @@
   </ItemGroup>
 
   <ItemGroup>
-	<!-- Removed WebView2 to produce a standalone WPF viewer with no external runtime dependencies -->
+	<!-- Add NAudio for simple synthesized playback -->
+	<PackageReference Include="NAudio" Version="2.1.1" />
   </ItemGroup>
 
   <ItemGroup>

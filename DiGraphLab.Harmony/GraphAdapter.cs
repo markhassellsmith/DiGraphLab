@@ -14,6 +14,8 @@ namespace DiGraphLab.Harmony
             public string Id { get; init; } = string.Empty;
             public string TraditionalLabel { get; init; } = string.Empty;
             public string NashvilleLabel { get; init; } = string.Empty;
+            // normalized quality key for UI mapping (e.g., "maj", "min", "7", "dim")
+            public string QualityKey { get; init; } = string.Empty;
             public int RootPc { get; init; }
             public IReadOnlyList<int> PitchClasses { get; init; } = Array.Empty<int>();
             public string Quality { get; init; } = string.Empty;
@@ -60,6 +62,7 @@ namespace DiGraphLab.Harmony
                     RootPc = n.Representative.RootPc,
                     PitchClasses = n.Representative.PitchClasses,
                     Quality = n.Representative.Quality,
+                    QualityKey = InferQualityKey(n.Representative.Quality),
                     Inversion = n.Representative.Inversion,
                     Count = n.Count,
                     Styles = n.Styles.ToArray()
@@ -75,6 +78,18 @@ namespace DiGraphLab.Harmony
             }).ToArray();
 
             return (nodes, edges);
+        }
+
+        private static string InferQualityKey(string quality)
+        {
+            if (string.IsNullOrWhiteSpace(quality)) return string.Empty;
+            var q = quality.ToLowerInvariant();
+            if (q.Contains("major") || q.Contains("maj")) return "maj";
+            if (q.Contains("minor") || q.Contains("min") || q == "m") return "min";
+            if (q.Contains("dim")) return "dim";
+            if (q.Contains("aug")) return "aug";
+            if (q.Contains("7")) return "7";
+            return q.Split(' ').FirstOrDefault() ?? q;
         }
     }
 }

@@ -7,6 +7,12 @@
     <DockPanel>
         <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="6">
             <Button x:Name="LoadDemoButton" Content="Load Demo" Width="100" Margin="4" Click="LoadDemoButton_Click" />
+            <Button x:Name="ImportGraphButton" Content="Import Graph" Width="110" Margin="4" Click="ImportGraphButton_Click" />
+            <Button x:Name="FitButton" Content="Fit" Width="60" Margin="4" Click="FitButton_Click" />
+            <Button x:Name="ZoomInButton" Content="Zoom +" Width="70" Margin="4" Click="ZoomInButton_Click" />
+            <Button x:Name="ZoomOutButton" Content="Zoom -" Width="70" Margin="4" Click="ZoomOutButton_Click" />
+            <TextBlock VerticalAlignment="Center" Margin="6,0,0,0">Zoom:</TextBlock>
+            <TextBlock x:Name="ToolbarZoomText" VerticalAlignment="Center" Margin="4,0,0,0">100%</TextBlock>
             <TextBlock VerticalAlignment="Center" Margin="8,0">Demo output folder will be created on your Desktop.</TextBlock>
             <TextBlock VerticalAlignment="Center" Margin="12,0,4,0">Notation:</TextBlock>
             <ComboBox x:Name="NotationCombo" Width="140" Margin="4" SelectionChanged="NotationCombo_SelectionChanged">
@@ -47,7 +53,78 @@
                     <TextBlock x:Name="QualityText" Text="-" Margin="0,0,0,8" />
                     <TextBlock Text="Pitch Classes:" FontWeight="SemiBold" />
                     <TextBlock x:Name="PitchClassesText" Text="-" Margin="0,0,0,8" />
-                    <Button x:Name="PlayButton" Content="Play (not implemented)" Width="140" Margin="0,8,0,0" Click="PlayButton_Click" />
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                        <Button x:Name="PlayButton" Content="Play" Width="90" Click="PlayButton_Click" />
+                        <TextBlock Text="Octave:" VerticalAlignment="Center" Margin="8,0,4,0" />
+                        <ComboBox x:Name="PlaybackOctaveCombo" Width="70" SelectionChanged="PlaybackOctaveCombo_SelectionChanged">
+                            <ComboBoxItem Tag="3">3</ComboBoxItem>
+                            <ComboBoxItem Tag="4" IsSelected="True">4</ComboBoxItem>
+                            <ComboBoxItem Tag="5">5</ComboBoxItem>
+                        </ComboBox>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,6,0,0">
+                        <TextBlock VerticalAlignment="Center" Margin="0,0,6,0">Zoom</TextBlock>
+                        <Slider x:Name="ZoomSlider" Minimum="30" Maximum="400" Value="100" Width="180" ValueChanged="ZoomSlider_ValueChanged" />
+                        <TextBlock x:Name="ZoomPercentText" Text="100%" VerticalAlignment="Center" Margin="6,0,0,0" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                        <Button x:Name="PlaySequenceButton" Content="Play Sequence" Width="110" Click="PlaySequenceButton_Click" />
+                        <Button x:Name="StopButton" Content="Stop" Width="70" Margin="6,0,0,0" Click="StopButton_Click" />
+                        <TextBlock Text="Tempo:" VerticalAlignment="Center" Margin="12,0,4,0" />
+                        <Slider x:Name="TempoSlider" Minimum="40" Maximum="240" Value="120" Width="120" ValueChanged="TempoSlider_ValueChanged" />
+                        <TextBlock x:Name="TempoText" Text="120 BPM" VerticalAlignment="Center" Margin="6,0,0,0" />
+                        <Button x:Name="ExportMidiButton" Content="Export MIDI" Width="100" Margin="8,0,0,0" Click="ExportMidiButton_Click" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                        <CheckBox x:Name="ArpeggiateCheck" Content="Arpeggiate" VerticalAlignment="Center" Margin="0,0,8,0" />
+                        <TextBlock Text="Velocity:" VerticalAlignment="Center" Margin="6,0,4,0" />
+                        <Slider x:Name="VelocitySlider" Minimum="10" Maximum="127" Value="100" Width="120" />
+                        <CheckBox x:Name="MetronomeCheck" Content="Metronome" VerticalAlignment="Center" Margin="12,0,0,0" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                        <TextBlock Text="Playhead:" VerticalAlignment="Center" Margin="0,0,6,0" />
+                        <ProgressBar x:Name="PlayheadBar" Width="220" Height="12" Minimum="0" Maximum="1" Value="0" />
+                        <TextBlock x:Name="PlayheadText" Text="0 / 0" VerticalAlignment="Center" Margin="8,0,0,0" />
+                    </StackPanel>
+                    <StackPanel Orientation="Vertical" Margin="0,8,0,0">
+                        <TextBlock FontWeight="SemiBold" Text="Sequence Editor" Margin="0,0,0,4" />
+                        <StackPanel Orientation="Horizontal">
+                            <Button x:Name="LoadSelectionButton" Content="Load Selection" Width="110" Click="LoadSelectionButton_Click" />
+                            <Button x:Name="MoveUpButton" Content="Up" Width="50" Margin="6,0,0,0" Click="MoveUpButton_Click" />
+                            <Button x:Name="MoveDownButton" Content="Down" Width="50" Margin="6,0,0,0" Click="MoveDownButton_Click" />
+                            <Button x:Name="RemoveButton" Content="Remove" Width="70" Margin="6,0,0,0" Click="RemoveButton_Click" />
+                            <Button x:Name="SaveSequenceButton" Content="Save Seq" Width="80" Margin="6,0,0,0" Click="SaveSequenceButton_Click" />
+                            <Button x:Name="LoadSequenceFileButton" Content="Load Seq" Width="80" Margin="6,0,0,0" Click="LoadSequenceFileButton_Click" />
+                        </StackPanel>
+                        <ListBox x:Name="SequenceList" Height="120" Margin="0,6,0,0" DisplayMemberPath="Label" AllowDrop="True"
+                                 PreviewMouseLeftButtonDown="SequenceList_PreviewMouseLeftButtonDown"
+                                 MouseMove="SequenceList_MouseMove"
+                                 DragOver="SequenceList_DragOver"
+                                 Drop="SequenceList_Drop" />
+                        <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                            <TextBlock VerticalAlignment="Center" Text="Beats:" Margin="0,0,6,0" />
+                            <Slider x:Name="DurationSlider" Minimum="1" Maximum="8" Value="1" Width="120" ValueChanged="DurationSlider_ValueChanged" />
+                            <TextBlock x:Name="DurationText" Text="1" VerticalAlignment="Center" Margin="6,0,0,0" />
+                        </StackPanel>
+                    </StackPanel>
+                    <Border BorderBrush="#EEE" BorderThickness="1" Margin="0,8,0,0" Padding="6">
+                        <StackPanel>
+                            <TextBlock FontWeight="Bold" Text="Analysis" Margin="0,0,0,6" />
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="Nodes:" FontWeight="SemiBold" />
+                                <TextBlock x:Name="AnalysisNodesText" Margin="6,0,0,0">0</TextBlock>
+                                <TextBlock Text=", Edges:" FontWeight="SemiBold" Margin="6,0,0,0" />
+                                <TextBlock x:Name="AnalysisEdgesText" Margin="6,0,0,0">0</TextBlock>
+                            </StackPanel>
+                            <TextBlock FontWeight="SemiBold" Text="Top Nodes" Margin="0,8,0,2" />
+                            <ListBox x:Name="TopNodesList" Height="90" DisplayMemberPath="Label" />
+                            <TextBlock FontWeight="SemiBold" Text="Top Edges" Margin="0,8,0,2" />
+                            <ListBox x:Name="TopEdgesList" Height="90" DisplayMemberPath="From" />
+                            <Button x:Name="ExportStatsButton" Content="Export Stats" Width="120" Margin="0,8,0,0" Click="ExportStatsButton_Click" />
+                            <Button x:Name="FindMotifsButton" Content="Find Motifs" Width="120" Margin="6,8,0,0" Click="FindMotifsButton_Click" />
+                            <Button x:Name="ShowMatrixButton" Content="Show Matrix" Width="120" Margin="6,8,0,0" Click="ShowMatrixButton_Click" />
+                        </StackPanel>
+                    </Border>
                 </StackPanel>
             </Border>
         </Grid>

@@ -16,6 +16,82 @@ namespace DiGraphLab.Harmony
             public HashSet<string> Styles { get; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         }
 
+        /// <summary>
+        /// Import a previously-exported HarmonyGraph JSON file and replace the current graph contents.
+        /// </summary>
+        public void ImportJson(string path)
+        {
+            if (string.IsNullOrEmpty(path)) throw new ArgumentNullException(nameof(path));
+            if (!File.Exists(path)) throw new FileNotFoundException("Graph file not found", path);
+            var txt = File.ReadAllText(path);
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            try
+            {
+                var model = JsonSerializer.Deserialize<ImportedModel>(txt, options);
+                if (model == null) return;
+                // clear current contents
+                _nodes.Clear();
+                _edges.Clear();
+
+                // populate nodes
+                foreach (var n in model.Nodes ?? Array.Empty<ImportedNode>())
+                {
+                    var rep = n.Representative ?? new ImportedRepresentative();
+                    var pcs = rep.PitchClasses ?? Array.Empty<int>();
+                    var chord = new Chord(rep.Traditional ?? rep.Nashville ?? n.Id, rep.RootPc, rep.Quality, rep.Inversion, pcs);
+                    var node = new Node { Id = n.Id, Representative = chord, Count = n.Count };
+                    if (n.Styles != null)
+                    {
+                        foreach (var s in n.Styles) node.Styles.Add(s);
+                    }
+                    _nodes[n.Id] = node;
+                }
+
+                // populate edges
+                foreach (var e in model.Edges ?? Array.Empty<ImportedEdge>())
+                {
+                    var edge = new Edge { From = e.From, To = e.To, Weight = e.Weight, Count = e.Count };
+                    _edges[(edge.From, edge.To)] = edge;
+                }
+            }
+            catch (JsonException ex)
+            {
+                throw new InvalidDataException("Invalid graph JSON", ex);
+            }
+        }
+
+        private sealed class ImportedModel
+        {
+            public ImportedNode[]? Nodes { get; set; }
+            public ImportedEdge[]? Edges { get; set; }
+        }
+
+        private sealed class ImportedNode
+        {
+            public string Id { get; set; } = string.Empty;
+            public ImportedRepresentative? Representative { get; set; }
+            public int Count { get; set; }
+            public string[]? Styles { get; set; }
+        }
+
+        private sealed class ImportedRepresentative
+        {
+            public string? Traditional { get; set; }
+            public string? Nashville { get; set; }
+            public int RootPc { get; set; }
+            public int[]? PitchClasses { get; set; }
+            public string? Quality { get; set; }
+            public int Inversion { get; set; }
+        }
+
+        private sealed class ImportedEdge
+        {
+            public string From { get; set; } = string.Empty;
+            public string To { get; set; } = string.Empty;
+            public double Weight { get; set; }
+            public int Count { get; set; }
+        }
+
         public sealed class Edge
         {
             public string From { get; init; } = string.Empty;
