@@ -13,8 +13,8 @@
   </ItemGroup>
 
   <ItemGroup>
-	<!-- Add NAudio for simple synthesized playback -->
-	<PackageReference Include="NAudio" Version="2.1.1" />
+	<!-- Add NAudio for simple synthesized playback (match resolved version to avoid NU1603 warning) -->
+	<PackageReference Include="NAudio" Version="2.2.0" />
   </ItemGroup>
 
   <ItemGroup>
