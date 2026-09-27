@@ -120,12 +120,23 @@ namespace DiGraphLab.Harmony.Viewer.Controls
                 bool dragging = false; Point offset = default;
                 g.MouseLeftButtonDown += (s, e) => { dragging = true; offset = e.GetPosition(PART_Canvas); offset.X = n.X - offset.X; offset.Y = n.Y - offset.Y; g.CaptureMouse(); };
                 g.MouseMove += (s, e) => { if (!dragging) return; var p = e.GetPosition(PART_Canvas); n.X = p.X + offset.X; n.Y = p.Y + offset.Y; n.Vx = 0; n.Vy = 0; };
-                g.MouseLeftButtonUp += (s, e) => { var wasDragging = dragging; dragging = false; try { g.ReleaseMouseCapture(); } catch { } ;
+                g.MouseLeftButtonUp += (s, e) => {
+                    var wasDragging = dragging;
+                    dragging = false;
+                    try { g.ReleaseMouseCapture(); } catch { }
                     // treat as click if it was not a drag movement
                     if (!wasDragging)
                     {
-                        HighlightNode(n);
-                        OnNodeClicked(n);
+                        // Shift+Click toggles multi-selection without changing the inspector
+                        if ((System.Windows.Input.Keyboard.Modifiers & System.Windows.Input.ModifierKeys.Shift) != 0)
+                        {
+                            ToggleSelectNode(n);
+                        }
+                        else
+                        {
+                            HighlightNode(n);
+                            OnNodeClicked(n);
+                        }
                     }
                 };
                 // allow right-button drag on nodes to pan the whole canvas
