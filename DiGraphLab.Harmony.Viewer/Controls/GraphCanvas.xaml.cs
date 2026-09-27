@@ -99,9 +99,15 @@ namespace DiGraphLab.Harmony.Viewer.Controls
             // create visuals
             foreach (var e in _edges)
             {
-                var line = new Line { Stroke = Brushes.Gray, StrokeThickness = 1.2, Opacity = 0.9 };
-                PART_Canvas.Children.Add(line);
-                e.Element = line;
+                // create a container so we can render a line plus an arrowhead polygon
+                var container = new Canvas { Width = 0, Height = 0, IsHitTestVisible = false };
+                var line = new Line { Stroke = Brushes.Gray, StrokeThickness = 1.2, Opacity = 0.9, IsHitTestVisible = false };
+                var arrow = new Polygon { Fill = Brushes.Gray, Stroke = Brushes.Gray, StrokeThickness = 1.0, IsHitTestVisible = false };
+                // add to container
+                container.Children.Add(line);
+                container.Children.Add(arrow);
+                PART_Canvas.Children.Add(container);
+                e.Element = container;
             }
 
             foreach (var n in _nodes)
@@ -481,12 +487,35 @@ namespace DiGraphLab.Harmony.Viewer.Controls
             // edges first
             foreach (var e in _edges)
             {
-                if (e.Element is Line line)
+                // support container with line + arrow polygon (directed edge)
+                if (e.Element is Canvas container)
                 {
                     var a = _nodes.FirstOrDefault(n => n.Id == e.From);
                     var b = _nodes.FirstOrDefault(n => n.Id == e.To);
                     if (a == null || b == null) continue;
-                    line.X1 = a.X; line.Y1 = a.Y; line.X2 = b.X; line.Y2 = b.Y;
+                    var line = container.Children.OfType<Line>().FirstOrDefault();
+                    var arrow = container.Children.OfType<Polygon>().FirstOrDefault();
+                    if (line != null)
+                    {
+                        line.X1 = a.X; line.Y1 = a.Y; line.X2 = b.X; line.Y2 = b.Y;
+                    }
+                    if (arrow != null)
+                    {
+                        // compute arrowhead geometry
+                        double ax = a.X, ay = a.Y, bx = b.X, by = b.Y;
+                        var dx = bx - ax; var dy = by - ay; var len = Math.Sqrt(dx * dx + dy * dy);
+                        if (len <= 0.001) continue;
+                        var ux = dx / len; var uy = dy / len;
+                        // perpendicular
+                        var px = -uy; var py = ux;
+                        double arrowLen = Math.Min(18.0, Math.Max(8.0, len * 0.12));
+                        double arrowWidth = arrowLen * 0.5;
+                        var baseX = bx - ux * arrowLen; var baseY = by - uy * arrowLen;
+                        var p1 = new System.Windows.Point(bx, by);
+                        var p2 = new System.Windows.Point(baseX + px * arrowWidth, baseY + py * arrowWidth);
+                        var p3 = new System.Windows.Point(baseX - px * arrowWidth, baseY - py * arrowWidth);
+                        arrow.Points = new System.Windows.Media.PointCollection { p1, p2, p3 };
+                    }
                 }
             }
             // nodes
