@@ -8,6 +8,7 @@
         <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="6">
             <Button x:Name="LoadDemoButton" Content="Load Demo" Width="100" Margin="4" Click="LoadDemoButton_Click" />
             <Button x:Name="ImportGraphButton" Content="Import Graph" Width="110" Margin="4" Click="ImportGraphButton_Click" />
+            <Button x:Name="ReloadGraphButton" Content="Reload Graph" Width="100" Margin="4" Click="ReloadGraphButton_Click" IsEnabled="False" />
             <Button x:Name="FitButton" Content="Fit" Width="60" Margin="4" Click="FitButton_Click" />
             <Button x:Name="ZoomInButton" Content="Zoom +" Width="70" Margin="4" Click="ZoomInButton_Click" />
             <Button x:Name="ZoomOutButton" Content="Zoom -" Width="70" Margin="4" Click="ZoomOutButton_Click" />

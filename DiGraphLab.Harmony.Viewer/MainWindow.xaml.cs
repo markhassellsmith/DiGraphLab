@@ -13,6 +13,43 @@ namespace DiGraphLab.Harmony.Viewer
 {
     public partial class MainWindow : Window
     {
+        // last imported graph file path for reload action
+        private string? _lastImportedGraphPath;
+
+        private void UpdateReloadButtonState()
+        {
+            try
+            {
+                ReloadGraphButton.IsEnabled = !string.IsNullOrEmpty(_lastImportedGraphPath) && File.Exists(_lastImportedGraphPath);
+            }
+
+        private void ReloadGraphButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(_lastImportedGraphPath)) { MessageBox.Show("No graph file recorded to reload."); return; }
+                if (!File.Exists(_lastImportedGraphPath)) { MessageBox.Show("Graph file not found: " + _lastImportedGraphPath); UpdateReloadButtonState(); return; }
+                var svc = new HarmonyService();
+                svc.Graph.ImportJson(_lastImportedGraphPath);
+                var (nodes, edges) = GraphAdapter.Convert(svc.Graph, new ChordFormatter.Options { PreferSharps = true, IncludeBass = true });
+                _loadedNodes = nodes.ToArray();
+                GraphCanvasControl.LoadModel(nodes, edges);
+                PopulateAnalysis(svc.Graph);
+                SendViewerOptions();
+                MessageBox.Show("Graph reloaded: " + _lastImportedGraphPath);
+            }
+            catch (InvalidDataException ide)
+            {
+                MessageBox.Show("Reload failed: invalid graph JSON. " + ide.Message, "Reload Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Reload failed: " + ex.Message, "Reload Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+            catch { ReloadGraphButton.IsEnabled = false; }
+        }
+
         public MainWindow()
         {
             InitializeComponent();
@@ -22,22 +59,38 @@ namespace DiGraphLab.Harmony.Viewer
 
         private void ImportGraphButton_Click(object sender, RoutedEventArgs e)
         {
+            var dlg = new Microsoft.Win32.OpenFileDialog { Filter = "Harmony Graph JSON|*.json;*.graph.json|All Files|*.*" };
+            if (dlg.ShowDialog(this) != true) return;
+            var path = dlg.FileName;
             try
             {
-                var dlg = new Microsoft.Win32.OpenFileDialog { Filter = "Harmony Graph JSON|*.json;*.graph.json|All Files|*.*" };
-                if (dlg.ShowDialog(this) == true)
-                {
-                    var svc = new HarmonyService();
-                    svc.Graph.ImportJson(dlg.FileName);
-                    var (nodes, edges) = GraphAdapter.Convert(svc.Graph, new ChordFormatter.Options { PreferSharps = true, IncludeBass = true });
-                    _loadedNodes = nodes.ToArray();
-                    GraphCanvasControl.LoadModel(nodes, edges);
-                    PopulateAnalysis(svc.Graph);
-                    SendViewerOptions();
-                    MessageBox.Show("Graph imported: " + dlg.FileName);
-                }
+                var svc = new HarmonyService();
+                svc.Graph.ImportJson(path);
+                var (nodes, edges) = GraphAdapter.Convert(svc.Graph, new ChordFormatter.Options { PreferSharps = true, IncludeBass = true });
+                _loadedNodes = nodes.ToArray();
+                GraphCanvasControl.LoadModel(nodes, edges);
+                PopulateAnalysis(svc.Graph);
+                SendViewerOptions();
+                _lastImportedGraphPath = path;
+                UpdateReloadButtonState();
+                MessageBox.Show("Graph imported: " + path);
             }
-            catch (Exception ex) { MessageBox.Show("Import failed: " + ex.Message); }
+            catch (InvalidDataException ide)
+            {
+                MessageBox.Show("Import failed: invalid graph JSON. " + ide.Message, "Import Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+            catch (FileNotFoundException fnf)
+            {
+                MessageBox.Show("Import failed: file not found. " + fnf.Message, "Import Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            catch (JsonException je)
+            {
+                MessageBox.Show("Import failed: JSON parse error. " + je.Message, "Import Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Import failed: " + ex.Message, "Import Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
 
         private void ShowMatrixButton_Click(object sender, RoutedEventArgs e)
