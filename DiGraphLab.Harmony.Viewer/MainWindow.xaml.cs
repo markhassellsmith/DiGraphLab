@@ -22,6 +22,289 @@ namespace DiGraphLab.Harmony.Viewer
             {
                 ReloadGraphButton.IsEnabled = !string.IsNullOrEmpty(_lastImportedGraphPath) && File.Exists(_lastImportedGraphPath);
             }
+            catch
+            {
+                ReloadGraphButton.IsEnabled = false;
+            }
+        }
+
+
+        private void TransposeButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (!int.TryParse(TransposeAmountText.Text, out var amt)) { MessageBox.Show("Invalid transpose amount."); return; }
+                var transposed = _svc.TransposeGraph(amt);
+                // replace current graph with transposed copy
+                _svc.ResetGraph();
+                // serialize transposed graph to JSON then import via service.Graph.ImportJson path
+                var tmp = System.IO.Path.GetTempFileName();
+                transposed.ExportJson(tmp);
+                _svc.Graph.ImportJson(tmp);
+                System.IO.File.Delete(tmp);
+                var (nodes, edges) = GraphAdapter.Convert(_svc.Graph, new ChordFormatter.Options { PreferSharps = true, IncludeBass = true });
+                _loadedNodes = nodes.ToArray();
+                GraphCanvasControl.LoadModel(nodes, edges);
+                PopulateAnalysis(_svc.Graph);
+            }
+            catch (Exception ex) { MessageBox.Show("Transpose failed: " + ex.Message); }
+        }
+
+        private void ImportMidiButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var dlg = new Microsoft.Win32.OpenFileDialog { Filter = "MIDI files (*.mid;*.midi)|*.mid;*.midi|All files (*.*)|*.*" };
+                if (dlg.ShowDialog() != true) return;
+                var path = dlg.FileName;
+                // Use NAudio.Midi reader if available to extract note-on events and group by time (simple approach)
+                try
+                {
+                    var midiEvents = new System.Collections.Generic.List<(long time, int note)>();
+                    var rdr = new NAudio.Midi.MidiFile(path, false);
+                    for (int t = 0; t < rdr.Tracks; t++)
+                    {
+                        var events = rdr.Events.GetTrackEvents(t);
+                        foreach (var ev in events)
+                        {
+                            if (ev is NAudio.Midi.NoteOnEvent noe && noe.Velocity > 0)
+                            {
+                                midiEvents.Add((noe.AbsoluteTime, noe.NoteNumber));
+                            }
+                        }
+                    }
+                    // group by quantized time (simple quantization into buckets)
+                    var groups = midiEvents.GroupBy(x => x.time).OrderBy(g => g.Key);
+                    foreach (var g in groups)
+                    {
+                        var pcs = g.Select(x => x.note % 12).Distinct().ToArray();
+                        var label = string.Join("/", pcs.Select(p => p.ToString()));
+                        var chord = new DiGraphLab.Harmony.Chord(label, pcs.Length>0?pcs[0]:0, "", 0, pcs);
+                        _svc.AddChord(chord, pcs.Length>0?pcs[0]:0);
+                    }
+                    var (nodes, edges) = GraphAdapter.Convert(_svc.Graph, new ChordFormatter.Options { PreferSharps = true, IncludeBass = true });
+                    _loadedNodes = nodes.ToArray();
+                    GraphCanvasControl.LoadModel(nodes, edges);
+                    PopulateAnalysis(_svc.Graph);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("MIDI import failed: " + ex.Message);
+                }
+            }
+            catch (Exception ex) { MessageBox.Show("Import MIDI failed: " + ex.Message); }
+        }
+
+        private void ApplyNodeButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var selected = GraphCanvasControl.GetSelectedNodeIds();
+                if (selected == null || selected.Length == 0) { MessageBox.Show("No node selected."); return; }
+                var id = selected[0];
+                var dto = _loadedNodes?.FirstOrDefault(n => n.Id == id);
+                if (dto == null) { MessageBox.Show("Selected node not found."); return; }
+                // read inline inspector values
+                var trad = Inspector_Traditional.Text?.Trim();
+                var nash = Inspector_Nashville.Text?.Trim();
+                var qual = Inspector_Quality.Text?.Trim();
+                var pcs = (Inspector_PitchClasses.Text ?? string.Empty).Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()).Where(s => s.Length>0).Select(s => int.TryParse(s, out var v) ? v % 12 : 0).ToArray();
+                var root = dto.RootPc; // keep original root unless quality/root editing UI added
+                var inversion = dto.Inversion;
+                var label = !string.IsNullOrWhiteSpace(trad) ? trad : (!string.IsNullOrWhiteSpace(nash) ? nash : dto.TraditionalLabel ?? dto.Id);
+                var chord = new DiGraphLab.Harmony.Chord(label ?? dto.Id, root, qual ?? dto.Quality, inversion, pcs);
+                var updated = _svc.UpdateNodeRepresentative(dto.Id, chord);
+                if (!updated) { MessageBox.Show("Failed to update node representative in graph."); return; }
+                // no styles/count from inline inspector; do a lightweight visual update
+                var (nodes, edges) = GraphAdapter.Convert(_svc.Graph, new ChordFormatter.Options { PreferSharps = true, IncludeBass = true });
+                _loadedNodes = nodes.ToArray();
+                GraphCanvasControl.LoadModel(nodes, edges);
+                PopulateAnalysis(_svc.Graph);
+            }
+            catch (Exception ex) { MessageBox.Show("Apply failed: " + ex.Message); }
+        }
+
+
+
+        private void ImportGraphJsonButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var dlg = new Microsoft.Win32.OpenFileDialog { Filter = "Graph JSON (*.json)|*.json|All files (*.*)|*.*" };
+                if (dlg.ShowDialog() != true) return;
+                var path = dlg.FileName;
+                // HarmonyGraph.ImportJson expects a file path. Call it directly with selected path.
+                try
+                {
+                    _svc.ResetGraph();
+                    _svc.Graph.ImportJson(path);
+                }
+                catch (InvalidDataException ide)
+                {
+                    MessageBox.Show("Import failed: invalid graph JSON. " + ide.Message, "Import Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+                catch (FileNotFoundException fnf)
+                {
+                    MessageBox.Show("Import failed: file not found. " + fnf.Message, "Import Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    return;
+                }
+                catch (JsonException je)
+                {
+                    MessageBox.Show("Import failed: JSON parse error. " + je.Message, "Import Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("Import failed: " + ex.Message);
+                    return;
+                }
+                // convert to DTOs and load
+                var (nodes, edges) = GraphAdapter.Convert(_svc.Graph, new ChordFormatter.Options { PreferSharps = true, IncludeBass = true });
+                _loadedNodes = nodes.ToArray();
+                GraphCanvasControl.LoadModel(nodes, edges);
+                _lastImportedGraphPath = path;
+                UpdateReloadButtonState();
+                PopulateAnalysis(_svc.Graph);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Import JSON failed: " + ex.Message);
+            }
+        }
+
+        private void EditNodeButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                // find the currently selected node DTO from loaded nodes via GraphCanvas selection
+                var selected = GraphCanvasControl.GetSelectedNodeIds();
+                if (selected == null || selected.Length == 0)
+                {
+                    MessageBox.Show("No node selected to edit.");
+                    return;
+                }
+                // use the first selected node
+                var id = selected[0];
+                var dto = _loadedNodes?.FirstOrDefault(n => n.Id == id);
+                if (dto == null)
+                {
+                    MessageBox.Show("Selected node not found in loaded model.");
+                    return;
+                }
+                var win = new EditNodeWindow();
+                win.LoadFromDto(dto);
+                if (win.ShowDialog() == true)
+                {
+                    // persist changes to the HarmonyService by constructing a Chord from edited fields
+                    var label = !string.IsNullOrWhiteSpace(win.Traditional) ? win.Traditional : (!string.IsNullOrWhiteSpace(win.Nashville) ? win.Nashville : dto.TraditionalLabel ?? dto.Id);
+                    var rootPc = win.RootPc ?? dto.RootPc;
+                    var quality = !string.IsNullOrWhiteSpace(win.Quality) ? win.Quality : dto.Quality;
+                    var inversion = win.Inversion ?? dto.Inversion;
+                    var pcs = (win.PitchClasses != null && win.PitchClasses.Length > 0) ? win.PitchClasses : dto.PitchClasses.ToArray();
+                    var chord = new DiGraphLab.Harmony.Chord(label ?? dto.Id, rootPc, quality, inversion, pcs);
+                    var updated = _svc.UpdateNodeRepresentative(dto.Id, chord);
+                    if (!updated) MessageBox.Show("Failed to update node representative in graph.");
+
+                    // persist styles and count as well when provided
+                    // currently EditNodeWindow does return Styles and may return a Count via its public properties
+                    try
+                    {
+                        // If Edit dialog provided styles or count, update node attributes in the graph
+                        if ((win.Styles != null && win.Styles.Length > 0) || win.Count != null)
+                        {
+                            var countToUse = win.Count ?? dto.Count;
+                            var merge = false;
+                            try { merge = win.MergeStyles; } catch { merge = false; }
+                            _svc.UpdateNodeAttributes(dto.Id, chord, win.Styles, countToUse, merge);
+                        }
+                    }
+                    catch { }
+
+                    // update the single node visual instead of reloading full model
+                    try
+                    {
+                        // rebuild a fresh NodeDto for the updated node by converting the graph for that node only
+                        var (nodesAll, edgesAll) = GraphAdapter.Convert(_svc.Graph, new ChordFormatter.Options { PreferSharps = true, IncludeBass = true });
+                        var updatedDto = nodesAll.FirstOrDefault(n => n.Id == dto.Id);
+                        if (updatedDto != null)
+                        {
+                            _loadedNodes = nodesAll.ToArray();
+                            GraphCanvasControl.UpdateNodeVisual(dto.Id, updatedDto);
+                        }
+                        PopulateAnalysis(_svc.Graph);
+                    }
+                    catch (Exception ex)
+                    {
+                        // fallback to full reload if incremental update fails
+                        var (nodes, edges) = GraphAdapter.Convert(_svc.Graph, new ChordFormatter.Options { PreferSharps = true, IncludeBass = true });
+                        _loadedNodes = nodes.ToArray();
+                        GraphCanvasControl.LoadModel(nodes, edges);
+                        PopulateAnalysis(_svc.Graph);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Edit failed: " + ex.Message);
+            }
+        }
+
+        private void ExportNodeButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var selected = GraphCanvasControl.GetSelectedNodeIds();
+                if (selected == null || selected.Length == 0)
+                {
+                    MessageBox.Show("No node selected to export.");
+                    return;
+                }
+                var id = selected[0];
+                var dto = _loadedNodes?.FirstOrDefault(n => n.Id == id);
+                if (dto == null)
+                {
+                    MessageBox.Show("Selected node not found in loaded model.");
+                    return;
+                }
+                var desktop = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
+                var path = System.IO.Path.Combine(desktop, dto.Id + "_node.json");
+                var json = System.Text.Json.JsonSerializer.Serialize(dto, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+                System.IO.File.WriteAllText(path, json);
+                MessageBox.Show("Exported node to " + path);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Export failed: " + ex.Message);
+            }
+        }
+
+        private void RemoveNodeButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var ids = GraphCanvasControl.SelectedNodeIds.ToArray();
+                if (ids.Length == 0)
+                {
+                    MessageBox.Show("Select a node to remove.");
+                    return;
+                }
+                var id = ids[0];
+                var removed = _svc.RemoveNode(id);
+                if (removed)
+                {
+                    var (nodes, edges) = GraphAdapter.Convert(_svc.Graph, new ChordFormatter.Options { PreferSharps = true, IncludeBass = true });
+                    _loadedNodes = nodes.ToArray();
+                    GraphCanvasControl.LoadModel(nodes, edges);
+                    MessageBox.Show($"Node removed: {id}");
+                }
+                else
+                {
+                    MessageBox.Show($"Node not found: {id}");
+                }
+            }
+            catch (Exception ex) { MessageBox.Show("Remove node failed: " + ex.Message); }
+        }
 
         private void ReloadGraphButton_Click(object sender, RoutedEventArgs e)
         {
@@ -29,12 +312,12 @@ namespace DiGraphLab.Harmony.Viewer
             {
                 if (string.IsNullOrEmpty(_lastImportedGraphPath)) { MessageBox.Show("No graph file recorded to reload."); return; }
                 if (!File.Exists(_lastImportedGraphPath)) { MessageBox.Show("Graph file not found: " + _lastImportedGraphPath); UpdateReloadButtonState(); return; }
-                var svc = new HarmonyService();
-                svc.Graph.ImportJson(_lastImportedGraphPath);
-                var (nodes, edges) = GraphAdapter.Convert(svc.Graph, new ChordFormatter.Options { PreferSharps = true, IncludeBass = true });
+                _svc.ResetGraph();
+                _svc.Graph.ImportJson(_lastImportedGraphPath);
+                var (nodes, edges) = GraphAdapter.Convert(_svc.Graph, new ChordFormatter.Options { PreferSharps = true, IncludeBass = true });
                 _loadedNodes = nodes.ToArray();
                 GraphCanvasControl.LoadModel(nodes, edges);
-                PopulateAnalysis(svc.Graph);
+                PopulateAnalysis(_svc.Graph);
                 SendViewerOptions();
                 MessageBox.Show("Graph reloaded: " + _lastImportedGraphPath);
             }
@@ -47,14 +330,119 @@ namespace DiGraphLab.Harmony.Viewer
                 MessageBox.Show("Reload failed: " + ex.Message, "Reload Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
-            catch { ReloadGraphButton.IsEnabled = false; }
-        }
+
+        private readonly HarmonyService _svc = new HarmonyService();
 
         public MainWindow()
         {
             InitializeComponent();
             // subscribe to canvas zoom changes to update toolbar display
             GraphCanvasControl.ZoomChanged += z => { try { Dispatcher.Invoke(() => ToolbarZoomText.Text = ((int)(z * 100)).ToString() + "%"); } catch { } };
+            // keyboard shortcut: Ctrl+E to open editor for first selected node
+            this.PreviewKeyDown += MainWindow_PreviewKeyDown;
+        }
+
+        private void MainWindow_PreviewKeyDown(object? sender, System.Windows.Input.KeyEventArgs e)
+        {
+            try
+            {
+                if (e == null) return;
+                if (e.Key == System.Windows.Input.Key.E && (System.Windows.Input.Keyboard.Modifiers & System.Windows.Input.ModifierKeys.Control) != 0)
+                {
+                    // open editor for first selected node
+                    EditNodeButton_Click(null, null);
+                    e.Handled = true;
+                }
+            }
+            catch { }
+        }
+
+        private void CreateEdgeButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                // require exactly two selected nodes (order: from -> to). If sequence buffer has items, prefer that order.
+                var ids = GraphCanvasControl.SelectedNodeIds.ToArray();
+                if (ids.Length < 2 && _sequenceBuffer.Count < 2)
+                {
+                    MessageBox.Show("Select two nodes (Shift+Click) or load a sequence with two items to create an edge.");
+                    return;
+                }
+                string fromId, toId;
+                if (_sequenceBuffer.Count >= 2)
+                {
+                    fromId = _sequenceBuffer[0].Id; toId = _sequenceBuffer[1].Id;
+                }
+                else
+                {
+                    fromId = ids[0]; toId = ids[1];
+                }
+
+                // lookup DTOs in loaded nodes
+                var fromDto = _loadedNodes?.FirstOrDefault(n => n.Id == fromId);
+                var toDto = _loadedNodes?.FirstOrDefault(n => n.Id == toId);
+                if (fromDto == null || toDto == null) { MessageBox.Show("Selected nodes not found in loaded nodes."); return; }
+
+                // create chord instances from DTOs and add edge via HarmonyService
+                var fromChord = new DiGraphLab.Harmony.Chord(fromDto.TraditionalLabel ?? fromDto.Id, fromDto.RootPc, fromDto.Quality, fromDto.Inversion, fromDto.PitchClasses);
+                var toChord = new DiGraphLab.Harmony.Chord(toDto.TraditionalLabel ?? toDto.Id, toDto.RootPc, toDto.Quality, toDto.Inversion, toDto.PitchClasses);
+                // add edge to shared service
+                _svc.AddEdge(fromChord, toChord, fromDto.RootPc, style: null);
+                // reload viewer with updated graph
+                var (nodes, edges) = GraphAdapter.Convert(_svc.Graph, new ChordFormatter.Options { PreferSharps = true, IncludeBass = true });
+                _loadedNodes = nodes.ToArray();
+                GraphCanvasControl.LoadModel(nodes, edges);
+                MessageBox.Show($"Edge created: {fromId} -> {toId}");
+            }
+            catch (Exception ex) { MessageBox.Show("Create edge failed: " + ex.Message); }
+        }
+
+        private void RemoveEdgeButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var ids = GraphCanvasControl.SelectedNodeIds.ToArray();
+                if (ids.Length < 2 && _sequenceBuffer.Count < 2)
+                {
+                    MessageBox.Show("Select two nodes (Shift+Click) or load a sequence with two items to remove an edge.");
+                    return;
+                }
+                string fromId = ids.Length >= 2 ? ids[0] : _sequenceBuffer[0].Id;
+                string toId = ids.Length >= 2 ? ids[1] : _sequenceBuffer[1].Id;
+                var removed = _svc.RemoveEdge(fromId, toId);
+                if (removed)
+                {
+                    var (nodes, edges) = GraphAdapter.Convert(_svc.Graph, new ChordFormatter.Options { PreferSharps = true, IncludeBass = true });
+                    _loadedNodes = nodes.ToArray();
+                    GraphCanvasControl.LoadModel(nodes, edges);
+                    MessageBox.Show($"Edge removed: {fromId} -> {toId}");
+                }
+                else
+                {
+                    MessageBox.Show($"Edge not found: {fromId} -> {toId}");
+                }
+            }
+            catch (Exception ex) { MessageBox.Show("Remove edge failed: " + ex.Message); }
+        }
+
+        private void CreateNodeButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var dlg = new CreateNodeWindow();
+                dlg.Owner = this;
+                if (dlg.ShowDialog() == true)
+                {
+                    var dto = dlg.Result;
+                // create chord and add to graph using AddChord on shared service
+                    var chord = new Chord(dto.Label ?? dto.Id, dto.RootPc, dto.Quality, dto.Inversion, dto.PitchClasses);
+                    _svc.AddChord(chord, dto.RootPc, dto.Style);
+                    var (nodes, edges) = GraphAdapter.Convert(_svc.Graph, new ChordFormatter.Options { PreferSharps = true, IncludeBass = true });
+                    _loadedNodes = nodes.ToArray();
+                    GraphCanvasControl.LoadModel(nodes, edges);
+                }
+            }
+            catch (Exception ex) { MessageBox.Show("Create node failed: " + ex.Message); }
         }
 
         private void ImportGraphButton_Click(object sender, RoutedEventArgs e)
@@ -64,12 +452,12 @@ namespace DiGraphLab.Harmony.Viewer
             var path = dlg.FileName;
             try
             {
-                var svc = new HarmonyService();
-                svc.Graph.ImportJson(path);
-                var (nodes, edges) = GraphAdapter.Convert(svc.Graph, new ChordFormatter.Options { PreferSharps = true, IncludeBass = true });
+                _svc.ResetGraph();
+                _svc.Graph.ImportJson(path);
+                var (nodes, edges) = GraphAdapter.Convert(_svc.Graph, new ChordFormatter.Options { PreferSharps = true, IncludeBass = true });
                 _loadedNodes = nodes.ToArray();
                 GraphCanvasControl.LoadModel(nodes, edges);
-                PopulateAnalysis(svc.Graph);
+                PopulateAnalysis(_svc.Graph);
                 SendViewerOptions();
                 _lastImportedGraphPath = path;
                 UpdateReloadButtonState();
@@ -230,7 +618,9 @@ namespace DiGraphLab.Harmony.Viewer
             Demo.RunSample(outDir);
 
             // load model via HarmonyService and GraphAdapter
-            var svc = new HarmonyService();
+            // use shared service for demo load
+            _svc.ResetGraph();
+            var svc = _svc;
             // recreate progression used in Demo
             var tonic = 0;
             var I = Chord.FromMajorDiatonic("I", tonic, 1, addSeventh: false);
@@ -244,18 +634,18 @@ namespace DiGraphLab.Harmony.Viewer
             // populate analysis UI based on the service's graph
             PopulateAnalysis(svc.Graph);
             // subscribe to node click events from GraphCanvas
-            GraphCanvasControl.NodeClicked += (trad, nash, quality, pcs, rootPc, inversion) =>
-            {
-                Dispatcher.Invoke(() =>
+                GraphCanvasControl.NodeClicked += (trad, nash, quality, pcs, rootPc, inversion) =>
                 {
-                    TraditionalText.Text = trad;
-                    NashvilleText.Text = nash;
-                    QualityText.Text = quality;
-                    PitchClassesText.Text = pcs != null ? string.Join(", ", pcs) : "-";
-                    // reconstruct chord for playback
-                    _selectedChord = new DiGraphLab.Harmony.Chord(trad, rootPc, quality, inversion, pcs ?? Array.Empty<int>()); 
-                });
-            };
+                    Dispatcher.Invoke(() =>
+                    {
+                        Inspector_Traditional.Text = trad;
+                        Inspector_Nashville.Text = nash;
+                        Inspector_Quality.Text = quality;
+                        Inspector_PitchClasses.Text = pcs != null ? string.Join(", ", pcs) : "-";
+                        // reconstruct chord for playback
+                        _selectedChord = new DiGraphLab.Harmony.Chord(trad, rootPc, quality, inversion, pcs ?? Array.Empty<int>());
+                    });
+                };
             // apply initial options
             SendViewerOptions();
         }
@@ -300,12 +690,12 @@ namespace DiGraphLab.Harmony.Viewer
             try
             {
                 var ids = GraphCanvasControl.SelectedNodeIds.ToArray();
-                if (ids.Length == 0)
+                if (ids.Length == 0 && _sequenceBuffer.Count == 0)
                 {
                     MessageBox.Show("No nodes selected. Use Shift+Click to build a sequence.");
                     return;
                 }
-                // reconstruct chords in the order selected; prefer explicit sequence editor if loaded
+                // reconstruct chords in selected order; prefer explicit sequence editor if loaded
                 var chords = new List<Chord>();
                 var idList = _sequenceBuffer.Count > 0 ? _sequenceBuffer.Select(n => n.Id).ToArray() : ids;
                 foreach (var id in idList)
@@ -316,7 +706,19 @@ namespace DiGraphLab.Harmony.Viewer
                 if (chords.Count == 0) { MessageBox.Show("No playable chords found."); return; }
                 _playCts?.Cancel(); _playCts = new System.Threading.CancellationTokenSource();
                 PlaySequenceButton.IsEnabled = false; StopButton.IsEnabled = true;
-                await PlayChordSequenceAsync(chords, _playbackOctave, _tempo, _playCts.Token);
+                int loopCount = 1;
+                if (LoopToggle?.IsChecked == true)
+                {
+                    if (!int.TryParse(LoopCountText?.Text, out loopCount) || loopCount <= 0) loopCount = -1; // -1 = infinite
+                }
+
+                int played = 0;
+                while (loopCount == -1 || played < loopCount)
+                {
+                    _playCts.Token.ThrowIfCancellationRequested();
+                    await PlayChordSequenceAsync(chords, _playbackOctave, _tempo, _playCts.Token);
+                    played++;
+                }
             }
             catch (OperationCanceledException) { }
             catch (Exception ex) { MessageBox.Show("Playback error: " + ex.Message); }

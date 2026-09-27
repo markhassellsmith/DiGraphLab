@@ -115,4 +115,20 @@ This repository contains a Harmony-focused directed-graph prototype with a small
 10. Add Dijkstra/A* search (reharmonization)
 	- Implement path search using VoiceLeading cost and expose a simple dialog to find low-cost paths between two nodes.
 
-If you want, I can start with step 1 (Import Graph JSON UI) and implement it now. Which step should I begin?
+Checkmarks: completed items are marked with ✅.
+
+1. ✅ Add "Import Graph JSON" UI (MainWindow)
+   - Button in toolbar/menu to open HarmonyGraph JSON and call HarmonyService/GraphAdapter to load and display.
+   - Validate JSON vs. HarmonyGraph export schema.
+
+2. ✅ Add "Create Node" UI
+   - Dialog to enter chord root (pc/name), quality, inversion, pitch-classes, label, style.
+   - Hook to HarmonyService.AddChord and refresh GraphCanvas.
+
+3. ✅ Add "Create / Remove Edge" UI
+   - Allow selecting source/target nodes and adding/removing edges via HarmonyService.AddEdge / internal edge removal API (implement edge removal if missing).
+
+4. Add node attribute editor in inspector
+   - Make selected-node inspector editable: modify root/quality/inversion/label and persist to HarmonyGraph (update representative or replace node).
+
+5. Add "Import MIDI / MusicXML" (basic)

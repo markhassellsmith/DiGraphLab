@@ -10,12 +10,21 @@ namespace DiGraphLab.Harmony
     /// </summary>
     public sealed class HarmonyService
     {
-        private readonly HarmonyGraph _graph = new HarmonyGraph();
+        private HarmonyGraph _graph = new HarmonyGraph();
 
         public HarmonyGraph Graph => _graph;
 
         public HarmonyService()
         {
+        }
+
+        /// <summary>
+        /// Reset the internal HarmonyGraph to a fresh empty graph.
+        /// Use this when loading a demo or starting a new graph session.
+        /// </summary>
+        public void ResetGraph()
+        {
+            _graph = new HarmonyGraph();
         }
 
         public string AddChord(Chord chord, int tonicPc, string? style = null, ChordFormatter.Options? fmtOptions = null)
@@ -50,6 +59,31 @@ namespace DiGraphLab.Harmony
         public void ExportCsv(string nodesPath, string edgesPath)
         {
             _graph.ExportCsv(nodesPath, edgesPath);
+        }
+
+        public bool RemoveEdge(string fromId, string toId)
+        {
+            return _graph.RemoveEdge(fromId, toId);
+        }
+
+        public bool RemoveNode(string id)
+        {
+            return _graph.RemoveNode(id);
+        }
+
+        public bool UpdateNodeRepresentative(string id, Chord representative)
+        {
+            return _graph.UpdateNodeRepresentative(id, representative);
+        }
+
+        public bool UpdateNodeAttributes(string id, Chord representative, string[]? styles, int? count, bool mergeStyles = false)
+        {
+            return _graph.UpdateNodeAttributes(id, representative, styles, count, mergeStyles);
+        }
+
+        public HarmonyGraph.Edge? GetEdge(string fromId, string toId)
+        {
+            return _graph.GetEdge(fromId, toId);
         }
 
         /// <summary>

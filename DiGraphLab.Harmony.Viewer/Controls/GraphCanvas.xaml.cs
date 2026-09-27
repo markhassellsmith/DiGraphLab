@@ -12,9 +12,15 @@ namespace DiGraphLab.Harmony.Viewer.Controls
 {
     public partial class GraphCanvas : UserControl
     {
+        // arrow and rendering constants
+        private const double ArrowPadding = 2.0; // gap between arrow tip and node boundary
+        private const double DefaultArrowLength = 14.0;
+        private const double ArrowWidthRatio = 0.5; // arrow width relative to length
+        private const double CurvatureOffsetDefault = 36.0; // default curvature for bidirectional edges
         private readonly DispatcherTimer _timer;
         private List<Node> _nodes = new();
         private List<Edge> _edges = new();
+        private System.Collections.Generic.Dictionary<string, Node> _nodeById = new();
         private readonly Random _rand = new();
 
         public GraphCanvas()
@@ -25,6 +31,84 @@ namespace DiGraphLab.Harmony.Viewer.Controls
             Loaded += (_, __) => { _timer.Start(); };
             Unloaded += (_, __) => { _timer.Stop(); };
             SizeChanged += (_, __) => ResetBounds();
+        }
+
+        /// <summary>
+        /// Update the visual representation for a single node using the provided NodeDto.
+        /// This updates the label and background brush without reloading the entire model.
+        /// </summary>
+        public void UpdateNodeVisual(string id, GraphAdapter.NodeDto dto)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(id) || dto == null) return;
+                if (!_nodeById.TryGetValue(id, out var node)) return;
+                // update model fields
+                var oldCount = node.Count;
+                node.Traditional = dto.TraditionalLabel;
+                node.Nashville = dto.NashvilleLabel;
+                node.Quality = dto.Quality;
+                node.PitchClasses = dto.PitchClasses.ToArray();
+                node.RootPc = dto.RootPc;
+                node.Inversion = dto.Inversion;
+                node.Count = dto.Count;
+                node.Styles = dto.Styles ?? Array.Empty<string>();
+
+                // update visual: the node.Element is a Canvas with a Rectangle and TextBlock(s)
+                if (node.Element is Canvas g)
+                {
+                    var rect = g.Children.OfType<Rectangle>().FirstOrDefault();
+                    var tb = g.Children.OfType<TextBlock>().FirstOrDefault();
+                    if (rect != null)
+                    {
+                        rect.Fill = GetBrushForQuality(node.Quality, node.Traditional);
+                    }
+                    if (tb != null)
+                    {
+                        tb.Text = node.Traditional + "\n" + node.Nashville;
+                    }
+                    // update count badge text (second textblock) and ensure badge visibility
+                    var badgeTxt = g.Children.OfType<TextBlock>().Skip(1).FirstOrDefault();
+                    var badgeEllipse = g.Children.OfType<Ellipse>().FirstOrDefault();
+                    if (badgeTxt != null)
+                    {
+                        badgeTxt.Text = node.Count.ToString();
+                    }
+                    // animate badge when count changed
+                    try
+                    {
+                        if (badgeEllipse != null && oldCount != node.Count)
+                        {
+                            // ensure a ScaleTransform exists
+                            if (!(badgeEllipse.RenderTransform is ScaleTransform))
+                            {
+                                badgeEllipse.RenderTransform = new ScaleTransform(1.0, 1.0);
+                                badgeEllipse.RenderTransformOrigin = new Point(0.5, 0.5);
+                            }
+                            var st = badgeEllipse.RenderTransform as ScaleTransform;
+                            var anim = new System.Windows.Media.Animation.DoubleAnimation(1.0, 1.4, new Duration(TimeSpan.FromMilliseconds(140))) { AutoReverse = true };
+                            st.BeginAnimation(ScaleTransform.ScaleXProperty, anim);
+                            st.BeginAnimation(ScaleTransform.ScaleYProperty, anim);
+                        }
+                    }
+                    catch { }
+                    // update style markers (stackpanel of rectangles)
+                    var stylePanel = g.Children.OfType<StackPanel>().FirstOrDefault();
+                    if (stylePanel != null)
+                    {
+                        stylePanel.Children.Clear();
+                        int shown = 0;
+                        foreach (var s in node.Styles)
+                        {
+                            if (shown++ >= 4) break;
+                            var mark = new Rectangle { Width = 10, Height = 10, RadiusX = 2, RadiusY = 2, Margin = new Thickness(2, 0, 2, 0), Stroke = Brushes.Black, StrokeThickness = 0.5 };
+                            mark.Fill = GetBrushForQuality(node.Quality, s ?? node.Quality);
+                            stylePanel.Children.Add(mark);
+                        }
+                    }
+                }
+            }
+            catch { }
         }
 
         // allow external callers to highlight/select nodes by id (used by matrix window)
@@ -70,9 +154,43 @@ namespace DiGraphLab.Harmony.Viewer.Controls
             var w = PART_Canvas.ActualWidth; var h = PART_Canvas.ActualHeight;
             foreach (var n in _nodes)
             {
+            // NOTE: Node visuals were created above. Expose a mapping for quick lookup by id.
+            // This dictionary is used by UpdateNodeVisual.
+            _nodeById = _nodes.ToDictionary(x => x.Id);
+
                 n.X = Math.Max(20, Math.Min(w - 20, n.X));
                 n.Y = Math.Max(20, Math.Min(h - 20, n.Y));
             }
+        }
+
+        // helper to get half extents for a node element
+        private double GetHalfWidth(Node node)
+        {
+            if (node.Element is FrameworkElement fe && !double.IsNaN(fe.Width) && fe.Width > 0) return fe.Width / 2.0;
+            return 60.0; // default half-width (120/2)
+        }
+
+        private double GetHalfHeight(Node node)
+        {
+            if (node.Element is FrameworkElement fe && !double.IsNaN(fe.Height) && fe.Height > 0) return fe.Height / 2.0;
+            return 18.0; // default half-height (36/2)
+        }
+
+        // compute a point on the boundary of src's rectangle towards dst
+        private System.Windows.Point ComputeBoundaryPoint(Node src, Node dst)
+        {
+            double ax = src.X, ay = src.Y, bx = dst.X, by = dst.Y;
+            var dx = bx - ax; var dy = by - ay; var len = Math.Sqrt(dx * dx + dy * dy);
+            if (len <= 0.001) return new System.Windows.Point(ax, ay);
+            var ux = dx / len; var uy = dy / len;
+            var ha = GetHalfWidth(src); var va = GetHalfHeight(src);
+            double sx = double.PositiveInfinity; double sy = double.PositiveInfinity;
+            if (Math.Abs(ux) > 1e-6) sx = ha / Math.Abs(ux);
+            if (Math.Abs(uy) > 1e-6) sy = va / Math.Abs(uy);
+            var tRectA = Math.Min(sx, sy);
+            var srcX = ax + ux * tRectA;
+            var srcY = ay + uy * tRectA;
+            return new System.Windows.Point(srcX, srcY);
         }
 
         public void LoadModel(IEnumerable<GraphAdapter.NodeDto> nodes, IEnumerable<GraphAdapter.EdgeDto> edges)
@@ -97,15 +215,27 @@ namespace DiGraphLab.Harmony.Viewer.Controls
             _edges = edges.Select(e => new Edge { From = e.From, To = e.To }).ToList();
 
             // create visuals
-            foreach (var e in _edges)
+            for (int ei = 0; ei < _edges.Count; ei++)
             {
-                // create a container so we can render a line plus an arrowhead polygon
+                var e = _edges[ei];
+                // detect reciprocal edge for curved rendering
+                bool hasReverse = _edges.Any(ev => ev.From == e.To && ev.To == e.From);
                 var container = new Canvas { Width = 0, Height = 0, IsHitTestVisible = false };
-                var line = new Line { Stroke = Brushes.Gray, StrokeThickness = 1.2, Opacity = 0.9, IsHitTestVisible = false };
-                var arrow = new Polygon { Fill = Brushes.Gray, Stroke = Brushes.Gray, StrokeThickness = 1.0, IsHitTestVisible = false };
-                // add to container
-                container.Children.Add(line);
-                container.Children.Add(arrow);
+                if (hasReverse)
+                {
+                    // curved path for bidirectional edge
+                    var path = new Path { Stroke = Brushes.Gray, StrokeThickness = 1.2, Opacity = 0.9, IsHitTestVisible = false };
+                    var arrow = new Polygon { Fill = Brushes.Gray, Stroke = Brushes.Gray, StrokeThickness = 1.0, IsHitTestVisible = false };
+                    container.Children.Add(path);
+                    container.Children.Add(arrow);
+                }
+                else
+                {
+                    var line = new Line { Stroke = Brushes.Gray, StrokeThickness = 1.2, Opacity = 0.9, IsHitTestVisible = false };
+                    var arrow = new Polygon { Fill = Brushes.Gray, Stroke = Brushes.Gray, StrokeThickness = 1.0, IsHitTestVisible = false };
+                    container.Children.Add(line);
+                    container.Children.Add(arrow);
+                }
                 PART_Canvas.Children.Add(container);
                 e.Element = container;
             }
@@ -118,7 +248,23 @@ namespace DiGraphLab.Harmony.Viewer.Controls
                 var rect = new Rectangle { Width = 120, Height = 36, RadiusX = 6, RadiusY = 6, Fill = fill, Stroke = Brushes.DarkSlateGray, StrokeThickness = 1.2 };
                 var txt = new TextBlock { Text = n.Label, TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center, Width = 110 };
                 Canvas.SetLeft(txt, 5); Canvas.SetTop(txt, 6);
-                g.Children.Add(rect); g.Children.Add(txt);
+                // decoration: count badge (top-right) and style markers (bottom-left)
+                var badge = new Ellipse { Width = 20, Height = 20, Fill = Brushes.CadetBlue, Stroke = Brushes.White, StrokeThickness = 1.0, IsHitTestVisible = false };
+                var badgeTxt = new TextBlock { Text = n.Count.ToString(), Foreground = Brushes.White, FontSize = 11, FontWeight = FontWeights.Bold, Width = 20, TextAlignment = TextAlignment.Center };
+                Canvas.SetRight(badge, 4); Canvas.SetTop(badge, 4);
+                Canvas.SetRight(badgeTxt, 4); Canvas.SetTop(badgeTxt, 6);
+                var stylePanel = new StackPanel { Orientation = Orientation.Horizontal, IsHitTestVisible = false };
+                Canvas.SetLeft(stylePanel, 6); Canvas.SetBottom(stylePanel, 4);
+                // create small rectangles for each style (up to 4 shown)
+                int shown = 0;
+                foreach (var s in n.Styles)
+                {
+                    if (shown++ >= 4) break;
+                    var mark = new Rectangle { Width = 10, Height = 10, RadiusX = 2, RadiusY = 2, Margin = new Thickness(2, 0, 2, 0), Stroke = Brushes.Black, StrokeThickness = 0.5 };
+                    mark.Fill = GetBrushForQuality(n.Quality, s ?? n.Quality);
+                    stylePanel.Children.Add(mark);
+                }
+                g.Children.Add(rect); g.Children.Add(txt); g.Children.Add(badge); g.Children.Add(badgeTxt); g.Children.Add(stylePanel);
                 PART_Canvas.Children.Add(g);
                 n.Element = g;
 
@@ -140,6 +286,14 @@ namespace DiGraphLab.Harmony.Viewer.Controls
                         }
                         else
                         {
+                            // single click should select only this node (clear others) so selection-order reflects click order
+                            try { ClearSelection(); } catch { }
+                            _selectedIds.Add(n.Id);
+                            if (n.Element is Canvas gg)
+                            {
+                                var rect = gg.Children.OfType<Rectangle>().FirstOrDefault();
+                                if (rect != null) rect.Stroke = Brushes.OrangeRed;
+                            }
                             HighlightNode(n);
                             OnNodeClicked(n);
                         }
@@ -184,6 +338,19 @@ namespace DiGraphLab.Harmony.Viewer.Controls
         // multi-selection support (Shift+Click to add/remove)
         private readonly List<string> _selectedIds = new();
         public IReadOnlyList<string> SelectedNodeIds => _selectedIds;
+
+        // helper to return selected ids as a string array for external callers
+        public string[] GetSelectedNodeIds()
+        {
+            try
+            {
+                return _selectedIds.ToArray();
+            }
+            catch
+            {
+                return Array.Empty<string>();
+            }
+        }
 
         public void ClearSelection()
         {
@@ -497,24 +664,97 @@ namespace DiGraphLab.Harmony.Viewer.Controls
                     var arrow = container.Children.OfType<Polygon>().FirstOrDefault();
                     if (line != null)
                     {
-                        line.X1 = a.X; line.Y1 = a.Y; line.X2 = b.X; line.Y2 = b.Y;
-                    }
-                    if (arrow != null)
-                    {
-                        // compute arrowhead geometry
+                        // compute intersection points with node rectangles so the line and arrowhead meet node boundaries
                         double ax = a.X, ay = a.Y, bx = b.X, by = b.Y;
                         var dx = bx - ax; var dy = by - ay; var len = Math.Sqrt(dx * dx + dy * dy);
                         if (len <= 0.001) continue;
                         var ux = dx / len; var uy = dy / len;
-                        // perpendicular
-                        var px = -uy; var py = ux;
-                        double arrowLen = Math.Min(18.0, Math.Max(8.0, len * 0.12));
-                        double arrowWidth = arrowLen * 0.5;
-                        var baseX = bx - ux * arrowLen; var baseY = by - uy * arrowLen;
-                        var p1 = new System.Windows.Point(bx, by);
-                        var p2 = new System.Windows.Point(baseX + px * arrowWidth, baseY + py * arrowWidth);
-                        var p3 = new System.Windows.Point(baseX - px * arrowWidth, baseY - py * arrowWidth);
-                        arrow.Points = new System.Windows.Media.PointCollection { p1, p2, p3 };
+
+                        // use class helpers to get half extents
+
+                        // compute target intersection (point on boundary of b's rectangle)
+                        var hb = GetHalfWidth(b); var vb = GetHalfHeight(b);
+                        double tx = double.PositiveInfinity;
+                        double ty = double.PositiveInfinity;
+                        if (Math.Abs(ux) > 1e-6) tx = hb / Math.Abs(ux);
+                        if (Math.Abs(uy) > 1e-6) ty = vb / Math.Abs(uy);
+                        var tRectB = Math.Min(tx, ty);
+                        // tip point on b boundary
+                        var tipX = bx - ux * tRectB;
+                        var tipY = by - uy * tRectB;
+
+                        // compute source intersection (point on boundary of a's rectangle)
+                        var ha = GetHalfWidth(a); var va = GetHalfHeight(a);
+                        double sx = double.PositiveInfinity;
+                        double sy = double.PositiveInfinity;
+                        if (Math.Abs(ux) > 1e-6) sx = ha / Math.Abs(ux);
+                        if (Math.Abs(uy) > 1e-6) sy = va / Math.Abs(uy);
+                        var tRectA = Math.Min(sx, sy);
+                        var srcX = ax + ux * tRectA;
+                        var srcY = ay + uy * tRectA;
+
+                        // set line endpoints to rectangle boundary points (add tiny padding)
+                        const double pad = 2.0;
+                        line.X1 = srcX + ux * pad; line.Y1 = srcY + uy * pad;
+                        line.X2 = tipX - ux * pad; line.Y2 = tipY - uy * pad;
+                    }
+                    if (arrow != null)
+                    {
+                        // if container has a Path child, it's a curved reciprocal edge; otherwise straight arrow
+                        var path = container.Children.OfType<Path>().FirstOrDefault();
+                        if (path != null)
+                        {
+                            // curved quadratic Bezier from src boundary to target boundary
+                            var aPt = ComputeBoundaryPoint(a, b);
+                            var bPt = ComputeBoundaryPoint(b, a);
+                            // midpoint and perpendicular for control point
+                            var mx = (aPt.X + bPt.X) / 2.0; var my = (aPt.Y + bPt.Y) / 2.0;
+                            var dx = bPt.X - aPt.X; var dy = bPt.Y - aPt.Y; var len = Math.Sqrt(dx * dx + dy * dy);
+                            if (len <= 0.001) continue;
+                            var ux = dx / len; var uy = dy / len; var px = -uy; var py = ux;
+                            var offset = CurvatureOffsetDefault;
+                            // choose offset sign based on hash to avoid exact overlap both ways
+                            var sign = (a.Id + ":" + b.Id).GetHashCode() % 2 == 0 ? 1.0 : -1.0;
+                            var cx = mx + px * offset * sign; var cy = my + py * offset * sign;
+
+                            var fig = new PathFigure { StartPoint = new System.Windows.Point(aPt.X, aPt.Y) };
+                            var quad = new QuadraticBezierSegment { Point1 = new System.Windows.Point(cx, cy), Point2 = new System.Windows.Point(bPt.X, bPt.Y), IsStroked = true };
+                            fig.Segments.Clear(); fig.Segments.Add(quad); fig.IsClosed = false;
+                            var geo = new PathGeometry(); geo.Figures.Add(fig);
+                            path.Data = geo;
+
+                            // arrow tip direction along tangent from control to end
+                            var tx = bPt.X; var ty = bPt.Y;
+                            var tdx = tx - cx; var tdy = ty - cy; var tlen = Math.Sqrt(tdx * tdx + tdy * tdy);
+                            if (tlen <= 0.001) continue;
+                            var tux = tdx / tlen; var tuy = tdy / tlen;
+                            double arrowLen = DefaultArrowLength; double arrowWidth = arrowLen * ArrowWidthRatio;
+                            var baseX = tx - tux * arrowLen; var baseY = ty - tuy * arrowLen;
+                            var p1 = new System.Windows.Point(tx, ty);
+                            var p2 = new System.Windows.Point(baseX + -tuy * arrowWidth, baseY + tux * arrowWidth);
+                            var p3 = new System.Windows.Point(baseX - -tuy * arrowWidth, baseY - tux * arrowWidth);
+                            arrow.Points = new System.Windows.Media.PointCollection { p1, p2, p3 };
+                        }
+                        else
+                        {
+                            // straight arrow already handled above for line endpoints; here recompute tip at b boundary
+                            double ax = a.X, ay = a.Y, bx = b.X, by = b.Y;
+                            var dx = bx - ax; var dy = by - ay; var len = Math.Sqrt(dx * dx + dy * dy);
+                            if (len <= 0.001) continue;
+                            var ux = dx / len; var uy = dy / len; var px = -uy; var py = ux;
+                            double arrowLen = DefaultArrowLength; double arrowWidth = arrowLen * ArrowWidthRatio;
+                            var hb = GetHalfWidth(b); var vb = GetHalfHeight(b);
+                            double tx = double.PositiveInfinity; double ty = double.PositiveInfinity;
+                            if (Math.Abs(ux) > 1e-6) tx = hb / Math.Abs(ux);
+                            if (Math.Abs(uy) > 1e-6) ty = vb / Math.Abs(uy);
+                            var tRectB = Math.Min(tx, ty);
+                            var tipX = bx - ux * tRectB; var tipY = by - uy * tRectB;
+                            var baseX = tipX - ux * arrowLen; var baseY = tipY - uy * arrowLen;
+                            var p1 = new System.Windows.Point(tipX, tipY);
+                            var p2 = new System.Windows.Point(baseX + px * arrowWidth, baseY + py * arrowWidth);
+                            var p3 = new System.Windows.Point(baseX - px * arrowWidth, baseY - py * arrowWidth);
+                            arrow.Points = new System.Windows.Media.PointCollection { p1, p2, p3 };
+                        }
                     }
                 }
             }

@@ -17,6 +17,15 @@ namespace DiGraphLab.Harmony
         }
 
         /// <summary>
+        /// Remove an edge from the graph by its node ids. Returns true if an edge was removed.
+        /// </summary>
+        public bool RemoveEdge(string fromId, string toId)
+        {
+            if (string.IsNullOrEmpty(fromId) || string.IsNullOrEmpty(toId)) return false;
+            return _edges.Remove((fromId, toId));
+        }
+
+        /// <summary>
         /// Import a previously-exported HarmonyGraph JSON file and replace the current graph contents.
         /// </summary>
         public void ImportJson(string path)
@@ -108,6 +117,72 @@ namespace DiGraphLab.Harmony
 
         public HarmonyGraph()
         {
+        }
+
+        /// <summary>
+        /// Remove a node and all incident edges from the graph. Returns true if a node was removed.
+        /// </summary>
+        public bool RemoveNode(string id)
+        {
+            if (string.IsNullOrEmpty(id)) return false;
+            if (!_nodes.Remove(id)) return false;
+            // remove edges incident on this node
+            var keys = _edges.Keys.Where(k => k.Item1 == id || k.Item2 == id).ToList();
+            foreach (var k in keys) _edges.Remove(k);
+            return true;
+        }
+
+        /// <summary>
+        /// Update the representative chord for an existing node. Returns true if updated.
+        /// </summary>
+        public bool UpdateNodeRepresentative(string id, Chord representative)
+        {
+            if (string.IsNullOrEmpty(id) || representative == null) return false;
+            if (!_nodes.TryGetValue(id, out var node)) return false;
+            var updated = new Node { Id = node.Id, Representative = representative, Count = node.Count };
+            foreach (var s in node.Styles) updated.Styles.Add(s);
+            _nodes[id] = updated;
+            return true;
+        }
+
+        /// <summary>
+        /// Update a node's representative chord, styles and optionally count. Returns true if node existed and was updated.
+        /// </summary>
+        public bool UpdateNodeAttributes(string id, Chord representative, string[]? styles, int? count, bool mergeStyles = false)
+        {
+            if (string.IsNullOrEmpty(id) || representative == null) return false;
+            if (!_nodes.TryGetValue(id, out var node)) return false;
+            var updated = new Node { Id = node.Id, Representative = representative, Count = count ?? node.Count };
+            if (styles != null)
+            {
+                if (mergeStyles)
+                {
+                    // merge provided styles with existing
+                    foreach (var s in node.Styles) updated.Styles.Add(s);
+                    foreach (var s in styles) if (!string.IsNullOrWhiteSpace(s)) updated.Styles.Add(s);
+                }
+                else
+                {
+                    // replace existing styles with provided list
+                    foreach (var s in styles) if (!string.IsNullOrWhiteSpace(s)) updated.Styles.Add(s);
+                }
+            }
+            else
+            {
+                // no styles provided: preserve existing
+                foreach (var s in node.Styles) updated.Styles.Add(s);
+            }
+            _nodes[id] = updated;
+            return true;
+        }
+
+        /// <summary>
+        /// Get a copy of an edge if present.
+        /// </summary>
+        public Edge? GetEdge(string fromId, string toId)
+        {
+            if (_edges.TryGetValue((fromId, toId), out var e)) return new Edge { From = e.From, To = e.To, Weight = e.Weight, Count = e.Count };
+            return null;
         }
 
         public string AddChord(Chord chord, int tonicPc, string? style = null, ChordFormatter.Options? fmtOptions = null)

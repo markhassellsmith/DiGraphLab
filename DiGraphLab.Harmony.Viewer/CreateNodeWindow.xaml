@@ -1,0 +1,30 @@
+<Window x:Class="DiGraphLab.Harmony.Viewer.CreateNodeWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Create Node" Height="300" Width="420">
+    <Grid Margin="8">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <StackPanel>
+            <TextBlock Text="ID/Label:" />
+            <TextBox x:Name="IdText" />
+            <TextBlock Text="Root PC (0-11):" Margin="0,8,0,0" />
+            <TextBox x:Name="RootText" />
+            <TextBlock Text="Quality:" Margin="0,8,0,0" />
+            <TextBox x:Name="QualityText" />
+            <TextBlock Text="Inversion:" Margin="0,8,0,0" />
+            <TextBox x:Name="InversionText" />
+            <TextBlock Text="Pitch Classes (comma separated):" Margin="0,8,0,0" />
+            <TextBox x:Name="PcsText" />
+            <TextBlock Text="Style (optional):" Margin="0,8,0,0" />
+            <TextBox x:Name="StyleText" />
+        </StackPanel>
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
+            <Button Content="OK" Width="90" Margin="4" Click="Ok_Click" />
+            <Button Content="Cancel" Width="90" Margin="4" Click="Cancel_Click" />
+        </StackPanel>
+    </Grid>
+</Window>

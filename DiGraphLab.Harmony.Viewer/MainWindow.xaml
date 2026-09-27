@@ -8,6 +8,12 @@
         <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="6">
             <Button x:Name="LoadDemoButton" Content="Load Demo" Width="100" Margin="4" Click="LoadDemoButton_Click" />
             <Button x:Name="ImportGraphButton" Content="Import Graph" Width="110" Margin="4" Click="ImportGraphButton_Click" />
+            <Button x:Name="ImportGraphJsonButton" Content="Import Graph JSON" Width="130" Margin="4" Click="ImportGraphJsonButton_Click" />
+            <Button x:Name="ImportMidiButton" Content="Import MIDI" Width="100" Margin="4" Click="ImportMidiButton_Click" />
+            <Button x:Name="CreateNodeButton" Content="Create Node" Width="100" Margin="4" Click="CreateNodeButton_Click" />
+            <Button x:Name="CreateEdgeButton" Content="Create Edge" Width="100" Margin="4" Click="CreateEdgeButton_Click" />
+            <Button x:Name="RemoveEdgeButton" Content="Remove Edge" Width="100" Margin="4" Click="RemoveEdgeButton_Click" />
+            <Button x:Name="RemoveNodeButton" Content="Remove Node" Width="100" Margin="4" Click="RemoveNodeButton_Click" />
             <Button x:Name="ReloadGraphButton" Content="Reload Graph" Width="100" Margin="4" Click="ReloadGraphButton_Click" IsEnabled="False" />
             <Button x:Name="FitButton" Content="Fit" Width="60" Margin="4" Click="FitButton_Click" />
             <Button x:Name="ZoomInButton" Content="Zoom +" Width="70" Margin="4" Click="ZoomInButton_Click" />
@@ -47,13 +53,18 @@
                 <StackPanel Margin="8">
                     <TextBlock FontWeight="Bold" FontSize="14" Text="Inspector" Margin="0,0,0,8" />
                     <TextBlock Text="Traditional:" FontWeight="SemiBold" />
-                    <TextBlock x:Name="TraditionalText" Text="-" TextWrapping="Wrap" Margin="0,0,0,8" />
+                    <TextBox x:Name="Inspector_Traditional" Text="-" TextWrapping="Wrap" Margin="0,0,0,8" />
                     <TextBlock Text="Nashville:" FontWeight="SemiBold" />
-                    <TextBlock x:Name="NashvilleText" Text="-" TextWrapping="Wrap" Margin="0,0,0,8" />
+                    <TextBox x:Name="Inspector_Nashville" Text="-" TextWrapping="Wrap" Margin="0,0,0,8" />
                     <TextBlock Text="Quality:" FontWeight="SemiBold" />
-                    <TextBlock x:Name="QualityText" Text="-" Margin="0,0,0,8" />
+                    <TextBox x:Name="Inspector_Quality" Text="-" Margin="0,0,0,8" />
                     <TextBlock Text="Pitch Classes:" FontWeight="SemiBold" />
-                    <TextBlock x:Name="PitchClassesText" Text="-" Margin="0,0,0,8" />
+                    <TextBox x:Name="Inspector_PitchClasses" Text="-" Margin="0,0,0,8" />
+                    <StackPanel Orientation="Horizontal" Margin="0,6,0,8">
+                        <Button x:Name="EditNodeButton" Content="Edit Node" Width="90" Click="EditNodeButton_Click" />
+                        <Button x:Name="ExportNodeButton" Content="Export Node" Width="90" Margin="6,0,0,0" Click="ExportNodeButton_Click" />
+                        <Button x:Name="ApplyNodeButton" Content="Apply" Width="80" Margin="6,0,0,0" Click="ApplyNodeButton_Click" ToolTip="Apply inline inspector changes" />
+                    </StackPanel>
                     <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                         <Button x:Name="PlayButton" Content="Play" Width="90" Click="PlayButton_Click" />
                         <TextBlock Text="Octave:" VerticalAlignment="Center" Margin="8,0,4,0" />
@@ -69,8 +80,16 @@
                         <TextBlock x:Name="ZoomPercentText" Text="100%" VerticalAlignment="Center" Margin="6,0,0,0" />
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                        <TextBlock VerticalAlignment="Center" Margin="0,0,6,0">Transpose (semitones):</TextBlock>
+                        <TextBox x:Name="TransposeAmountText" Width="60" Text="0" />
+                        <Button x:Name="TransposeButton" Content="Transpose" Margin="6,0,0,0" Click="TransposeButton_Click" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                         <Button x:Name="PlaySequenceButton" Content="Play Sequence" Width="110" Click="PlaySequenceButton_Click" />
                         <Button x:Name="StopButton" Content="Stop" Width="70" Margin="6,0,0,0" Click="StopButton_Click" />
+                        <CheckBox x:Name="LoopToggle" Content="Loop" VerticalAlignment="Center" Margin="8,0,0,0" />
+                        <TextBlock Text="Count:" VerticalAlignment="Center" Margin="8,0,4,0" />
+                        <TextBox x:Name="LoopCountText" Width="60" Text="1" Margin="4,0,0,0" />
                         <TextBlock Text="Tempo:" VerticalAlignment="Center" Margin="12,0,4,0" />
                         <Slider x:Name="TempoSlider" Minimum="40" Maximum="240" Value="120" Width="120" ValueChanged="TempoSlider_ValueChanged" />
                         <TextBlock x:Name="TempoText" Text="120 BPM" VerticalAlignment="Center" Margin="6,0,0,0" />
