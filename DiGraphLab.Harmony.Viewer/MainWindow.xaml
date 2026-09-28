@@ -12,8 +12,8 @@
             <Button x:Name="ImportMidiButton" Content="Import MIDI" Width="100" Margin="4" Click="ImportMidiButton_Click" />
             <Button x:Name="HelpButton" Content="Help" Width="70" Margin="4" Click="HelpButton_Click" ToolTip="Open the user guide with quick start and examples" />
             <Button x:Name="CreateNodeButton" Content="Create Node" Width="100" Margin="4" Click="CreateNodeButton_Click" />
-            <Button x:Name="CreateEdgeButton" Content="Create Edge" Width="100" Margin="4" Click="CreateEdgeButton_Click" />
-            <Button x:Name="RemoveEdgeButton" Content="Remove Edge" Width="100" Margin="4" Click="RemoveEdgeButton_Click" />
+            <Button x:Name="CreateEdgeButton" Content="Create Edge" Width="100" Margin="4" Click="CreateEdgeButton_Click" ToolTip="Shift+Click source then target, or select sequence with Load Selection; click to add a directed edge from source -> target." />
+            <Button x:Name="RemoveEdgeButton" Content="Remove Edge" Width="100" Margin="4" Click="RemoveEdgeButton_Click" ToolTip="Select source then target (Shift+Click) or load a 2-item sequence; click to remove the directed edge between them." />
             <Button x:Name="RemoveNodeButton" Content="Remove Node" Width="100" Margin="4" Click="RemoveNodeButton_Click" />
             <Button x:Name="ReloadGraphButton" Content="Reload Graph" Width="100" Margin="4" Click="ReloadGraphButton_Click" IsEnabled="False" />
             <Button x:Name="FitButton" Content="Fit" Width="60" Margin="4" Click="FitButton_Click" />

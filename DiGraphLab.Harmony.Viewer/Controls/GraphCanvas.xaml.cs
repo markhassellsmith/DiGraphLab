@@ -317,7 +317,11 @@ namespace DiGraphLab.Harmony.Viewer.Controls
                 if (node.Element is Canvas g)
                 {
                     var rect = g.Children.OfType<Rectangle>().FirstOrDefault();
-                    if (rect != null) rect.StrokeThickness = 1.2;
+                    if (rect != null)
+                    {
+                        rect.StrokeThickness = 1.2;
+                        rect.Stroke = Brushes.DarkSlateGray;
+                    }
                     g.RenderTransform = null;
                     Panel.SetZIndex(g, 0);
                     g.Effect = null;
@@ -328,10 +332,19 @@ namespace DiGraphLab.Harmony.Viewer.Controls
             {
                 var rect = gg.Children.OfType<Rectangle>().FirstOrDefault();
                 if (rect != null) rect.StrokeThickness = 3.0;
+                rect.Stroke = Brushes.OrangeRed;
                 gg.RenderTransform = new ScaleTransform(1.06, 1.06);
                 // elevate and add subtle shadow
                 Panel.SetZIndex(gg, 10);
                 gg.Effect = new System.Windows.Media.Effects.DropShadowEffect { Color = Colors.Black, BlurRadius = 8, Opacity = 0.4, Direction = 270, ShadowDepth = 4 };
+                // quick pulse animation to draw attention
+                try
+                {
+                    var st = new System.Windows.Media.Animation.DoubleAnimation(1.0, 1.12, new Duration(TimeSpan.FromMilliseconds(180))) { AutoReverse = true };
+                    gg.RenderTransform.BeginAnimation(ScaleTransform.ScaleXProperty, st);
+                    gg.RenderTransform.BeginAnimation(ScaleTransform.ScaleYProperty, st);
+                }
+                catch { }
             }
         }
 
@@ -371,12 +384,12 @@ namespace DiGraphLab.Harmony.Viewer.Controls
             if (_selectedIds.Contains(n.Id))
             {
                 _selectedIds.Remove(n.Id);
-                if (n.Element is Canvas g) { var rect = g.Children.OfType<Rectangle>().FirstOrDefault(); if (rect != null) rect.Stroke = Brushes.DarkSlateGray; }
+                if (n.Element is Canvas g) { var rect = g.Children.OfType<Rectangle>().FirstOrDefault(); if (rect != null) { rect.Stroke = Brushes.DarkSlateGray; rect.StrokeThickness = 1.2; } }
             }
             else
             {
                 _selectedIds.Add(n.Id);
-                if (n.Element is Canvas g) { var rect = g.Children.OfType<Rectangle>().FirstOrDefault(); if (rect != null) rect.Stroke = Brushes.OrangeRed; }
+                if (n.Element is Canvas g) { var rect = g.Children.OfType<Rectangle>().FirstOrDefault(); if (rect != null) { rect.Stroke = Brushes.OrangeRed; rect.StrokeThickness = 3.0; } }
             }
         }
 
