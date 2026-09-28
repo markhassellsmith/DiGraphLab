@@ -369,6 +369,18 @@ namespace DiGraphLab.Harmony.Viewer
                 {
                     var (nodes, edges) = GraphAdapter.Convert(_svc.Graph, new ChordFormatter.Options { PreferSharps = true, IncludeBass = true });
                     PopulateInspectorChoices(nodes);
+                    // subscribe to canvas node click events so inspector updates regardless of how a graph is loaded
+                    GraphCanvasControl.NodeClicked += (trad, nash, quality, pcs, rootPc, inversion) =>
+                    {
+                        Dispatcher.Invoke(() =>
+                        {
+                            Inspector_Traditional.Text = trad;
+                            Inspector_Nashville.Text = nash;
+                            Inspector_Quality.Text = quality;
+                            Inspector_PitchClasses.Text = pcs != null ? string.Join(", ", pcs) : "-";
+                            _selectedChord = new DiGraphLab.Harmony.Chord(trad, rootPc, quality, inversion, pcs ?? Array.Empty<int>());
+                        });
+                    };
                     // show first-run tutorial unless suppressed by flag file
                     try
                     {
