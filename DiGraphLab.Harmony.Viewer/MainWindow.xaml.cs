@@ -95,6 +95,27 @@ namespace DiGraphLab.Harmony.Viewer
             catch (Exception ex) { MessageBox.Show("Import MIDI failed: " + ex.Message); }
         }
 
+        private void HelpButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var repo = System.IO.Path.GetFullPath(System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", ".."));
+                var guide = System.IO.Path.Combine(repo, "DiGraphLab_User_Guide.md");
+                if (System.IO.File.Exists(guide))
+                {
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = guide, UseShellExecute = true });
+                }
+                else
+                {
+                    MessageBox.Show("User guide not found in repository root: " + guide);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Failed to open user guide: " + ex.Message);
+            }
+        }
+
         private void ApplyNodeButton_Click(object sender, RoutedEventArgs e)
         {
             try
@@ -173,7 +194,7 @@ namespace DiGraphLab.Harmony.Viewer
             }
         }
 
-        private void EditNodeButton_Click(object sender, RoutedEventArgs e)
+        private void EditNodeButton_Click(object? sender, RoutedEventArgs? e)
         {
             try
             {
@@ -234,7 +255,7 @@ namespace DiGraphLab.Harmony.Viewer
                         }
                         PopulateAnalysis(_svc.Graph);
                     }
-                    catch (Exception ex)
+                    catch (Exception)
                     {
                         // fallback to full reload if incremental update fails
                         var (nodes, edges) = GraphAdapter.Convert(_svc.Graph, new ChordFormatter.Options { PreferSharps = true, IncludeBass = true });
@@ -318,7 +339,9 @@ namespace DiGraphLab.Harmony.Viewer
                 _loadedNodes = nodes.ToArray();
                 GraphCanvasControl.LoadModel(nodes, edges);
                 PopulateAnalysis(_svc.Graph);
+                // refresh inspector combo sources based on loaded graph
                 SendViewerOptions();
+                PopulateInspectorChoices(nodes);
                 MessageBox.Show("Graph reloaded: " + _lastImportedGraphPath);
             }
             catch (InvalidDataException ide)
@@ -340,6 +363,47 @@ namespace DiGraphLab.Harmony.Viewer
             GraphCanvasControl.ZoomChanged += z => { try { Dispatcher.Invoke(() => ToolbarZoomText.Text = ((int)(z * 100)).ToString() + "%"); } catch { } };
             // keyboard shortcut: Ctrl+E to open editor for first selected node
             this.PreviewKeyDown += MainWindow_PreviewKeyDown;
+            // ensure inspector combo sources are populated at startup from current (empty) graph
+            Loaded += (_, __) => {
+                try
+                {
+                    var (nodes, edges) = GraphAdapter.Convert(_svc.Graph, new ChordFormatter.Options { PreferSharps = true, IncludeBass = true });
+                    PopulateInspectorChoices(nodes);
+                }
+                catch { }
+            };
+        }
+
+        private void PopulateInspectorChoices(IEnumerable<DiGraphLab.Harmony.GraphAdapter.NodeDto> nodes)
+        {
+            try
+            {
+                var qualities = nodes.Select(n => n.Quality).Where(q => !string.IsNullOrWhiteSpace(q)).Distinct().Take(30).ToList();
+                Inspector_Quality.Items.Clear();
+                foreach (var q in new[] { "maj", "maj7", "m", "m7", "7", "dim", "sus4" }) Inspector_Quality.Items.Add(new System.Windows.Controls.ComboBoxItem { Content = q });
+                foreach (var q in qualities)
+                {
+                    if (!Inspector_Quality.Items.OfType<System.Windows.Controls.ComboBoxItem>().Any(i => (i.Content?.ToString() ?? string.Empty) == q))
+                        Inspector_Quality.Items.Add(new System.Windows.Controls.ComboBoxItem { Content = q });
+                }
+
+                // populate Notation and Key combos with values found in nodes (keys derived from RootPc)
+                var keys = nodes.Select(n => n.RootPc).Distinct().OrderBy(x => x).ToArray();
+                if (keys.Length > 0)
+                {
+                    // ensure KeyCombo has standard items (it does in XAML), but we choose the first node's key as selected
+                    var firstKey = keys[0];
+                    foreach (System.Windows.Controls.ComboBoxItem item in KeyCombo.Items)
+                    {
+                        if (int.TryParse(item.Tag?.ToString() ?? "", out var v) && v == firstKey)
+                        {
+                            KeyCombo.SelectedItem = item;
+                            break;
+                        }
+                    }
+                }
+            }
+            catch { }
         }
 
         private void MainWindow_PreviewKeyDown(object? sender, System.Windows.Input.KeyEventArgs e)
@@ -349,7 +413,7 @@ namespace DiGraphLab.Harmony.Viewer
                 if (e == null) return;
                 if (e.Key == System.Windows.Input.Key.E && (System.Windows.Input.Keyboard.Modifiers & System.Windows.Input.ModifierKeys.Control) != 0)
                 {
-                    // open editor for first selected node
+                    // open editor for the first selected node
                     EditNodeButton_Click(null, null);
                     e.Handled = true;
                 }

@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/documents/">
+    <File Path="DiGraphLab_User_Guide.md" />
     <File Path="documents/DiGraphLab_Project_Plan.md" />
   </Folder>
   <Folder Name="/Solution Items/">

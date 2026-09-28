@@ -10,6 +10,7 @@
             <Button x:Name="ImportGraphButton" Content="Import Graph" Width="110" Margin="4" Click="ImportGraphButton_Click" />
             <Button x:Name="ImportGraphJsonButton" Content="Import Graph JSON" Width="130" Margin="4" Click="ImportGraphJsonButton_Click" />
             <Button x:Name="ImportMidiButton" Content="Import MIDI" Width="100" Margin="4" Click="ImportMidiButton_Click" />
+            <Button x:Name="HelpButton" Content="Help" Width="70" Margin="4" Click="HelpButton_Click" ToolTip="Open the user guide with quick start and examples" />
             <Button x:Name="CreateNodeButton" Content="Create Node" Width="100" Margin="4" Click="CreateNodeButton_Click" />
             <Button x:Name="CreateEdgeButton" Content="Create Edge" Width="100" Margin="4" Click="CreateEdgeButton_Click" />
             <Button x:Name="RemoveEdgeButton" Content="Remove Edge" Width="100" Margin="4" Click="RemoveEdgeButton_Click" />
@@ -53,13 +54,23 @@
                 <StackPanel Margin="8">
                     <TextBlock FontWeight="Bold" FontSize="14" Text="Inspector" Margin="0,0,0,8" />
                     <TextBlock Text="Traditional:" FontWeight="SemiBold" />
-                    <TextBox x:Name="Inspector_Traditional" Text="-" TextWrapping="Wrap" Margin="0,0,0,8" />
+                    <TextBox x:Name="Inspector_Traditional" Text="-" TextWrapping="Wrap" Margin="0,0,0,8" ToolTip="Traditional label (e.g. C, Gmaj7). Type a friendly chord label and click Apply." />
                     <TextBlock Text="Nashville:" FontWeight="SemiBold" />
-                    <TextBox x:Name="Inspector_Nashville" Text="-" TextWrapping="Wrap" Margin="0,0,0,8" />
+                    <TextBox x:Name="Inspector_Nashville" Text="-" TextWrapping="Wrap" Margin="0,0,0,8" ToolTip="Nashville-number label (eg. I, IV, V). Optional alternative to Traditional label." />
                     <TextBlock Text="Quality:" FontWeight="SemiBold" />
-                    <TextBox x:Name="Inspector_Quality" Text="-" Margin="0,0,0,8" />
+                    <ComboBox x:Name="Inspector_Quality" IsEditable="True" Margin="0,0,0,4" ToolTip="Chord quality (eg. maj7, m, 7). Choose or type a value.">
+                        <ComboBoxItem>maj</ComboBoxItem>
+                        <ComboBoxItem>maj7</ComboBoxItem>
+                        <ComboBoxItem>m</ComboBoxItem>
+                        <ComboBoxItem>m7</ComboBoxItem>
+                        <ComboBoxItem>7</ComboBoxItem>
+                        <ComboBoxItem>dim</ComboBoxItem>
+                        <ComboBoxItem>sus4</ComboBoxItem>
+                    </ComboBox>
+                    <TextBlock FontStyle="Italic" Foreground="#888" FontSize="11" Text="Examples: maj, maj7, m, m7, 7" Margin="0,0,0,8" />
                     <TextBlock Text="Pitch Classes:" FontWeight="SemiBold" />
-                    <TextBox x:Name="Inspector_PitchClasses" Text="-" Margin="0,0,0,8" />
+                    <TextBox x:Name="Inspector_PitchClasses" Text="" Margin="0,0,0,4" ToolTip="Pitch classes as comma-separated integers 0..11 (eg. 0,4,7 for C major triad)." />
+                    <TextBlock FontStyle="Italic" Foreground="#888" FontSize="11" Text="Example: 0,4,7  (C major triad). Use integers 0..11 separated by commas." Margin="0,0,0,8" />
                     <StackPanel Orientation="Horizontal" Margin="0,6,0,8">
                         <Button x:Name="EditNodeButton" Content="Edit Node" Width="90" Click="EditNodeButton_Click" />
                         <Button x:Name="ExportNodeButton" Content="Export Node" Width="90" Margin="6,0,0,0" Click="ExportNodeButton_Click" />
