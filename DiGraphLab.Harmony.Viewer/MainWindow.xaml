@@ -54,9 +54,11 @@
                 <StackPanel Margin="8">
                     <TextBlock FontWeight="Bold" FontSize="14" Text="Inspector" Margin="0,0,0,8" />
                     <TextBlock Text="Traditional:" FontWeight="SemiBold" />
-                    <TextBox x:Name="Inspector_Traditional" Text="-" TextWrapping="Wrap" Margin="0,0,0,8" ToolTip="Traditional label (e.g. C, Gmaj7). Type a friendly chord label and click Apply." />
+                    <ComboBox x:Name="Inspector_Traditional" IsEditable="True" Margin="0,0,0,4" ToolTip="Traditional label (e.g. C, Gmaj7). Choose or type a value and click Apply." />
+                    <TextBlock FontStyle="Italic" Foreground="#888" FontSize="11" Text="Examples: C, Gmaj7, Dm" Margin="0,0,0,8" />
                     <TextBlock Text="Nashville:" FontWeight="SemiBold" />
-                    <TextBox x:Name="Inspector_Nashville" Text="-" TextWrapping="Wrap" Margin="0,0,0,8" ToolTip="Nashville-number label (eg. I, IV, V). Optional alternative to Traditional label." />
+                    <ComboBox x:Name="Inspector_Nashville" IsEditable="True" Margin="0,0,0,4" ToolTip="Nashville-number label (eg. I, IV, V). Choose or type a value." />
+                    <TextBlock FontStyle="Italic" Foreground="#888" FontSize="11" Text="Examples: I, IV, V, ii" Margin="0,0,0,8" />
                     <TextBlock Text="Quality:" FontWeight="SemiBold" />
                     <ComboBox x:Name="Inspector_Quality" IsEditable="True" Margin="0,0,0,4" ToolTip="Chord quality (eg. maj7, m, 7). Choose or type a value.">
                         <ComboBoxItem>maj</ComboBoxItem>

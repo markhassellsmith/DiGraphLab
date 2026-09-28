@@ -387,11 +387,19 @@ namespace DiGraphLab.Harmony.Viewer
                         Inspector_Quality.Items.Add(new System.Windows.Controls.ComboBoxItem { Content = q });
                 }
 
+                // populate Traditional and Nashville recent values
+                var trads = nodes.Select(n => n.TraditionalLabel).Where(s => !string.IsNullOrWhiteSpace(s)).Distinct().Take(50).ToList();
+                Inspector_Traditional.Items.Clear();
+                foreach (var t in trads) Inspector_Traditional.Items.Add(new System.Windows.Controls.ComboBoxItem { Content = t });
+
+                var nashes = nodes.Select(n => n.NashvilleLabel).Where(s => !string.IsNullOrWhiteSpace(s)).Distinct().Take(50).ToList();
+                Inspector_Nashville.Items.Clear();
+                foreach (var t in nashes) Inspector_Nashville.Items.Add(new System.Windows.Controls.ComboBoxItem { Content = t });
+
                 // populate Notation and Key combos with values found in nodes (keys derived from RootPc)
                 var keys = nodes.Select(n => n.RootPc).Distinct().OrderBy(x => x).ToArray();
                 if (keys.Length > 0)
                 {
-                    // ensure KeyCombo has standard items (it does in XAML), but we choose the first node's key as selected
                     var firstKey = keys[0];
                     foreach (System.Windows.Controls.ComboBoxItem item in KeyCombo.Items)
                     {
