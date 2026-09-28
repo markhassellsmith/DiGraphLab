@@ -572,8 +572,25 @@ namespace DiGraphLab.Harmony.Viewer
                 // simplified: ask only for a label (generic digraph node)
                 var input = Microsoft.VisualBasic.Interaction.InputBox("Enter node label:", "Add Node", "Node");
                 if (string.IsNullOrWhiteSpace(input)) return;
-                // create a generic node stored as a minimal Chord wrapper so underlying model persists
-                var chord = new Chord(input.Trim(), 0, string.Empty, 0, Array.Empty<int>());
+                // try to parse a chord label; default to major triad if parsing fails or quality missing
+                var parser = new DiGraphLab.Harmony.SimpleChordLabelParser();
+                var parsed = parser.Parse(input.Trim());
+                DiGraphLab.Harmony.Chord chord;
+                if (parsed != null)
+                {
+                    chord = parsed;
+                }
+                else
+                {
+                    // default: treat label as root if possible, otherwise create C major triad
+                    string lbl = input.Trim();
+                    // naive root detection: first char A-G
+                    var r = lbl.Length > 0 && "ABCDEFG".Contains(char.ToUpperInvariant(lbl[0])) ? char.ToUpperInvariant(lbl[0]).ToString() : "C";
+                    int rootPc = 0;
+                    try { rootPc = DiGraphLab.Harmony.ChordLabelParserHelper.ParseRootPc(r); } catch { rootPc = 0; }
+                    var pcs = new[] { rootPc, (rootPc + 4) % 12, (rootPc + 7) % 12 };
+                    chord = new DiGraphLab.Harmony.Chord(lbl, rootPc, "maj", 0, pcs);
+                }
                 _svc.AddChord(chord, 0);
                 var (nodes, edges) = GraphAdapter.Convert(_svc.Graph, new ChordFormatter.Options { PreferSharps = true, IncludeBass = true });
                 _loadedNodes = nodes.ToArray();

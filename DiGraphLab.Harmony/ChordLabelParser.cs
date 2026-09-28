@@ -74,4 +74,36 @@ namespace DiGraphLab.Harmony
             return basePc;
         }
     }
+
+    // helper to expose parsing utilities without making internal methods public on the parser
+    public static class ChordLabelParserHelper
+    {
+        public static int ParseRootPc(string s) => SimpleChordLabelParserInternalParseRootPc(s);
+
+        // delegate to internal private method via duplication of logic to avoid exposing internals
+        private static int SimpleChordLabelParserInternalParseRootPc(string s)
+        {
+            s = s.Trim();
+            if (s.Length == 0) return 0;
+            char c = s[0];
+            int basePc = c switch
+            {
+                'C' => 0,
+                'D' => 2,
+                'E' => 4,
+                'F' => 5,
+                'G' => 7,
+                'A' => 9,
+                'B' => 11,
+                _ => 0
+            };
+            if (s.Length > 1)
+            {
+                var acc = s[1];
+                if (acc == '#') basePc = (basePc + 1) % 12;
+                else if (acc == 'b' || acc == 'B') basePc = (basePc + 11) % 12;
+            }
+            return basePc;
+        }
+    }
 }
