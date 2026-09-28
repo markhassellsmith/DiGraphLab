@@ -147,32 +147,61 @@ namespace DiGraphLab.Harmony.Viewer.Controls
         // zoom/translate state
         private double _zoom = 1.0;
         private const double ZoomStep = 1.15;
+        // track last canvas size to preserve positions across resizes
+        private double _lastCanvasWidth = 0.0;
+        private double _lastCanvasHeight = 0.0;
 
         private void ResetBounds()
         {
-            // ensure nodes remain within bounds
+            // ensure nodes remain within bounds and preserve relative positions across resizes
             var w = PART_Canvas.ActualWidth; var h = PART_Canvas.ActualHeight;
-            foreach (var n in _nodes)
-            {
-            // NOTE: Node visuals were created above. Expose a mapping for quick lookup by id.
-            // This dictionary is used by UpdateNodeVisual.
+            if (double.IsNaN(w) || double.IsNaN(h) || w <= 0 || h <= 0) return;
+
+            // expose mapping for quick lookup by id (used by UpdateNodeVisual)
             _nodeById = _nodes.ToDictionary(x => x.Id);
 
+            // if we have a previous canvas size, scale node positions to preserve layout
+            if (_lastCanvasWidth > 0 && _lastCanvasHeight > 0 && (_lastCanvasWidth != w || _lastCanvasHeight != h))
+            {
+                var sx = w / _lastCanvasWidth; var sy = h / _lastCanvasHeight;
+                // scale positions
+                foreach (var n in _nodes)
+                {
+                    n.X = n.X * sx;
+                    n.Y = n.Y * sy;
+                }
+            }
+
+            // clamp to safe margins
+            foreach (var n in _nodes)
+            {
                 n.X = Math.Max(20, Math.Min(w - 20, n.X));
                 n.Y = Math.Max(20, Math.Min(h - 20, n.Y));
             }
+
+            // record current size for next resize event
+            _lastCanvasWidth = w; _lastCanvasHeight = h;
         }
 
         // helper to get half extents for a node element
         private double GetHalfWidth(Node node)
         {
-            if (node.Element is FrameworkElement fe && !double.IsNaN(fe.Width) && fe.Width > 0) return fe.Width / 2.0;
+            if (node.Element is FrameworkElement fe)
+            {
+                // prefer ActualWidth (rendered size) then Width property
+                if (!double.IsNaN(fe.ActualWidth) && fe.ActualWidth > 0) return fe.ActualWidth / 2.0;
+                if (!double.IsNaN(fe.Width) && fe.Width > 0) return fe.Width / 2.0;
+            }
             return 60.0; // default half-width (120/2)
         }
 
         private double GetHalfHeight(Node node)
         {
-            if (node.Element is FrameworkElement fe && !double.IsNaN(fe.Height) && fe.Height > 0) return fe.Height / 2.0;
+            if (node.Element is FrameworkElement fe)
+            {
+                if (!double.IsNaN(fe.ActualHeight) && fe.ActualHeight > 0) return fe.ActualHeight / 2.0;
+                if (!double.IsNaN(fe.Height) && fe.Height > 0) return fe.Height / 2.0;
+            }
             return 18.0; // default half-height (36/2)
         }
 
