@@ -356,9 +356,52 @@ namespace DiGraphLab.Harmony.Viewer
 
         private readonly HarmonyService _svc = new HarmonyService();
 
+        // keyboard commands for menu and shortcuts
+        public static readonly System.Windows.Input.RoutedUICommand NewGraphCommand = new System.Windows.Input.RoutedUICommand("New Graph", "NewGraph", typeof(MainWindow));
+        public static readonly System.Windows.Input.RoutedUICommand AddNodeCommand = new System.Windows.Input.RoutedUICommand("Add Node", "AddNode", typeof(MainWindow));
+        public static readonly System.Windows.Input.RoutedUICommand AddEdgeCommand = new System.Windows.Input.RoutedUICommand("Add Edge", "AddEdge", typeof(MainWindow));
+        public static readonly System.Windows.Input.RoutedUICommand EditNodeCommand = new System.Windows.Input.RoutedUICommand("Edit Node", "EditNode", typeof(MainWindow));
+        public static readonly System.Windows.Input.RoutedUICommand RemoveNodeCommand = new System.Windows.Input.RoutedUICommand("Remove Node", "RemoveNode", typeof(MainWindow));
+        public static readonly System.Windows.Input.RoutedUICommand RemoveEdgeCommand = new System.Windows.Input.RoutedUICommand("Remove Edge", "RemoveEdge", typeof(MainWindow));
+        public static readonly System.Windows.Input.RoutedUICommand ZoomInCommand = new System.Windows.Input.RoutedUICommand("Zoom In", "ZoomIn", typeof(MainWindow));
+        public static readonly System.Windows.Input.RoutedUICommand ZoomOutCommand = new System.Windows.Input.RoutedUICommand("Zoom Out", "ZoomOut", typeof(MainWindow));
+        public static readonly System.Windows.Input.RoutedUICommand FitCommand = new System.Windows.Input.RoutedUICommand("Fit", "Fit", typeof(MainWindow));
+
         public MainWindow()
         {
             InitializeComponent();
+            // bind commands to handlers and set input gestures
+            CommandBindings.Add(new System.Windows.Input.CommandBinding(System.Windows.Input.ApplicationCommands.New, (_, __) => NewGraphButton_Click(_, (RoutedEventArgs?)null)));
+            InputBindings.Add(new System.Windows.Input.KeyBinding(System.Windows.Input.ApplicationCommands.New, System.Windows.Input.Key.N, System.Windows.Input.ModifierKeys.Control));
+
+            CommandBindings.Add(new System.Windows.Input.CommandBinding(System.Windows.Input.ApplicationCommands.Undo, (_, __) => CreateNodeButton_Click(_, (RoutedEventArgs?)null)));
+            InputBindings.Add(new System.Windows.Input.KeyBinding(System.Windows.Input.ApplicationCommands.Undo, System.Windows.Input.Key.N, System.Windows.Input.ModifierKeys.Control | System.Windows.Input.ModifierKeys.Shift));
+
+            var addEdgeCmd = new System.Windows.Input.RoutedCommand();
+            CommandBindings.Add(new System.Windows.Input.CommandBinding(addEdgeCmd, (_, __) => CreateEdgeButton_Click(_, (RoutedEventArgs?)null)));
+            InputBindings.Add(new System.Windows.Input.KeyBinding(addEdgeCmd, System.Windows.Input.Key.E, System.Windows.Input.ModifierKeys.Control));
+
+            var editNodeCmd = new System.Windows.Input.RoutedCommand();
+            CommandBindings.Add(new System.Windows.Input.CommandBinding(editNodeCmd, (_, __) => EditNodeButton_Click(_, (RoutedEventArgs?)null)));
+            InputBindings.Add(new System.Windows.Input.KeyBinding(editNodeCmd, System.Windows.Input.Key.Enter, System.Windows.Input.ModifierKeys.Control));
+
+            CommandBindings.Add(new System.Windows.Input.CommandBinding(System.Windows.Input.ApplicationCommands.Delete, (_, __) => RemoveNodeButton_Click(_, (RoutedEventArgs?)null)));
+            InputBindings.Add(new System.Windows.Input.KeyBinding(System.Windows.Input.ApplicationCommands.Delete, System.Windows.Input.Key.Delete, System.Windows.Input.ModifierKeys.None));
+
+            var removeEdgeCmd = new System.Windows.Input.RoutedCommand();
+            CommandBindings.Add(new System.Windows.Input.CommandBinding(removeEdgeCmd, (_, __) => RemoveEdgeButton_Click(_, (RoutedEventArgs?)null)));
+            InputBindings.Add(new System.Windows.Input.KeyBinding(removeEdgeCmd, System.Windows.Input.Key.Delete, System.Windows.Input.ModifierKeys.Shift));
+
+            CommandBindings.Add(new System.Windows.Input.CommandBinding(System.Windows.Input.NavigationCommands.Zoom, (_, __) => ZoomInButton_Click(_, (RoutedEventArgs?)null)));
+            InputBindings.Add(new System.Windows.Input.KeyBinding(System.Windows.Input.NavigationCommands.Zoom, System.Windows.Input.Key.OemPlus, System.Windows.Input.ModifierKeys.Control));
+
+            var zoomOutCmd = new System.Windows.Input.RoutedCommand();
+            CommandBindings.Add(new System.Windows.Input.CommandBinding(zoomOutCmd, (_, __) => ZoomOutButton_Click(_, (RoutedEventArgs?)null)));
+            InputBindings.Add(new System.Windows.Input.KeyBinding(zoomOutCmd, System.Windows.Input.Key.OemMinus, System.Windows.Input.ModifierKeys.Control));
+
+            var fitCmd = new System.Windows.Input.RoutedCommand();
+            CommandBindings.Add(new System.Windows.Input.CommandBinding(fitCmd, (_, __) => FitButton_Click(_, (RoutedEventArgs?)null)));
+            InputBindings.Add(new System.Windows.Input.KeyBinding(fitCmd, System.Windows.Input.Key.D0, System.Windows.Input.ModifierKeys.Control));
             // subscribe to canvas zoom changes to update toolbar display
             GraphCanvasControl.ZoomChanged += z => { try { Dispatcher.Invoke(() => ToolbarZoomText.Text = ((int)(z * 100)).ToString() + "%"); } catch { } };
             // keyboard shortcut: Ctrl+E to open editor for first selected node
