@@ -369,6 +369,18 @@ namespace DiGraphLab.Harmony.Viewer
                 {
                     var (nodes, edges) = GraphAdapter.Convert(_svc.Graph, new ChordFormatter.Options { PreferSharps = true, IncludeBass = true });
                     PopulateInspectorChoices(nodes);
+                    // show first-run tutorial unless suppressed by flag file
+                    try
+                    {
+                        var cfg = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "firstrun.flag");
+                        if (!System.IO.File.Exists(cfg))
+                        {
+                            var fr = new FirstRunWindow();
+                            fr.Owner = this;
+                            fr.ShowDialog();
+                        }
+                    }
+                    catch { }
                 }
                 catch { }
             };

@@ -1,0 +1,27 @@
+<Window x:Class="DiGraphLab.Harmony.Viewer.FirstRunWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Welcome to DiGraphLab" Height="320" Width="520" WindowStartupLocation="CenterOwner">
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <TextBlock FontSize="16" FontWeight="Bold" Text="Quick Start Tutorial" />
+        <StackPanel Grid.Row="1" Margin="0,12,0,12">
+            <TextBlock TextWrapping="Wrap" Margin="0,0,0,8">This short tutorial will show the minimal steps to inspect and edit a chord node. It runs only once unless you choose to show it again.</TextBlock>
+            <StackPanel Margin="8,6,0,0">
+                <TextBlock Text="1. Click 'Load Demo' on the toolbar to populate a sample graph." TextWrapping="Wrap" Margin="0,4,0,4" />
+                <TextBlock Text="2. Click any node on the canvas to populate the Inspector at the right." TextWrapping="Wrap" Margin="0,4,0,4" />
+                <TextBlock Text="3. Use the Inspector fields (Quality, Pitch Classes) and click 'Apply' to update the node." TextWrapping="Wrap" Margin="0,4,0,4" />
+                <TextBlock Text="4. Shift+Click two nodes and click 'Create Edge' to add a directed edge." TextWrapping="Wrap" Margin="0,4,0,4" />
+            </StackPanel>
+        </StackPanel>
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
+            <CheckBox x:Name="DontShowCheck" VerticalAlignment="Center" Margin="0,0,12,0">Don't show again</CheckBox>
+            <Button x:Name="CloseBtn" Width="90" Margin="0,0,12,0" Click="CloseBtn_Click">Got it</Button>
+            <Button Width="80" Click="OpenGuide_Click">Open Guide</Button>
+        </StackPanel>
+    </Grid>
+</Window>
