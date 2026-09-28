@@ -279,6 +279,9 @@ namespace DiGraphLab.Harmony.Viewer.Controls
                 // selection overlay - hidden by default, shown when node is selected
                 var selOverlay = new Rectangle { Width = 120, Height = 36, RadiusX = 8, RadiusY = 8, Fill = Brushes.Transparent, Stroke = Brushes.OrangeRed, StrokeThickness = 4.0, Visibility = Visibility.Collapsed, IsHitTestVisible = false };
                 selOverlay.Tag = "SEL_OVERLAY";
+                // selection label
+                var selLabel = new TextBlock { Text = "Selected", Foreground = Brushes.White, Background = new SolidColorBrush(Color.FromArgb(192, 255, 140, 0)), FontSize = 11, Padding = new Thickness(4, 0, 4, 0), Visibility = Visibility.Collapsed };
+                selLabel.Tag = "SEL_LABEL";
                 var txt = new TextBlock { Text = n.Label, TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center, Width = 110 };
                 Canvas.SetLeft(txt, 5); Canvas.SetTop(txt, 6);
                 // decoration: count badge (top-right) and style markers (bottom-left)
@@ -299,6 +302,8 @@ namespace DiGraphLab.Harmony.Viewer.Controls
                 }
                 g.Children.Add(rect);
                 g.Children.Add(selOverlay);
+                Canvas.SetLeft(selLabel, 6); Canvas.SetTop(selLabel, -6);
+                g.Children.Add(selLabel);
                 g.Children.Add(txt); g.Children.Add(badge); g.Children.Add(badgeTxt); g.Children.Add(stylePanel);
                 PART_Canvas.Children.Add(g);
                 n.Element = g;
@@ -379,6 +384,7 @@ namespace DiGraphLab.Harmony.Viewer.Controls
                     gg.RenderTransform.BeginAnimation(ScaleTransform.ScaleXProperty, st);
                     gg.RenderTransform.BeginAnimation(ScaleTransform.ScaleYProperty, st);
                 }
+
                 catch { }
             }
         }
@@ -411,7 +417,9 @@ namespace DiGraphLab.Harmony.Viewer.Controls
                     var rect = g.Children.OfType<Rectangle>().FirstOrDefault(r => (r.Tag as string) == "MAIN_RECT");
                     if (rect != null) rect.Stroke = Brushes.DarkSlateGray;
                     var overlay = g.Children.OfType<Rectangle>().FirstOrDefault(r => (r.Tag as string) == "SEL_OVERLAY");
-                    if (overlay != null) overlay.Visibility = Visibility.Collapsed;
+                    if (overlay != null) { overlay.Visibility = Visibility.Collapsed; overlay.Fill = Brushes.Transparent; }
+                    var label = g.Children.OfType<TextBlock>().FirstOrDefault(t => (t.Tag as string) == "SEL_LABEL");
+                    if (label != null) label.Visibility = Visibility.Collapsed;
                 }
             }
         }
@@ -421,12 +429,12 @@ namespace DiGraphLab.Harmony.Viewer.Controls
             if (_selectedIds.Contains(n.Id))
             {
                 _selectedIds.Remove(n.Id);
-                if (n.Element is Canvas g) { var rect = g.Children.OfType<Rectangle>().FirstOrDefault(r => (r.Tag as string) == "MAIN_RECT"); if (rect != null) { rect.Stroke = Brushes.DarkSlateGray; rect.StrokeThickness = 1.2; } var overlay = g.Children.OfType<Rectangle>().FirstOrDefault(r => (r.Tag as string) == "SEL_OVERLAY"); if (overlay != null) overlay.Visibility = Visibility.Collapsed; }
+                if (n.Element is Canvas g) { var rect = g.Children.OfType<Rectangle>().FirstOrDefault(r => (r.Tag as string) == "MAIN_RECT"); if (rect != null) { rect.Stroke = Brushes.DarkSlateGray; rect.StrokeThickness = 1.2; } var overlay = g.Children.OfType<Rectangle>().FirstOrDefault(r => (r.Tag as string) == "SEL_OVERLAY"); if (overlay != null) { overlay.Visibility = Visibility.Collapsed; overlay.Fill = Brushes.Transparent; } var label = g.Children.OfType<TextBlock>().FirstOrDefault(t => (t.Tag as string) == "SEL_LABEL"); if (label != null) label.Visibility = Visibility.Collapsed; }
             }
             else
             {
                 _selectedIds.Add(n.Id);
-                if (n.Element is Canvas g) { var rect = g.Children.OfType<Rectangle>().FirstOrDefault(r => (r.Tag as string) == "MAIN_RECT"); if (rect != null) { rect.Stroke = Brushes.OrangeRed; rect.StrokeThickness = 3.0; } var overlay = g.Children.OfType<Rectangle>().FirstOrDefault(r => (r.Tag as string) == "SEL_OVERLAY"); if (overlay != null) overlay.Visibility = Visibility.Visible; }
+                if (n.Element is Canvas g) { var rect = g.Children.OfType<Rectangle>().FirstOrDefault(r => (r.Tag as string) == "MAIN_RECT"); if (rect != null) { rect.Stroke = Brushes.OrangeRed; rect.StrokeThickness = 3.0; } var overlay = g.Children.OfType<Rectangle>().FirstOrDefault(r => (r.Tag as string) == "SEL_OVERLAY"); if (overlay != null) { overlay.Visibility = Visibility.Visible; overlay.Fill = new SolidColorBrush(Color.FromArgb(60, 255, 140, 0)); } var label = g.Children.OfType<TextBlock>().FirstOrDefault(t => (t.Tag as string) == "SEL_LABEL"); if (label != null) label.Visibility = Visibility.Visible; }
             }
         }
 
