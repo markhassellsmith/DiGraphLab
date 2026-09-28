@@ -5,7 +5,17 @@
         xmlns:controls="clr-namespace:DiGraphLab.Harmony.Viewer.Controls"
         Title="DiGraphLab Harmony Viewer" Height="720" Width="1024">
     <DockPanel>
+        <!-- simplified toolbar for basic digraph editing -->
         <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="6">
+            <Button x:Name="NewGraphButton" Content="New Graph" Width="100" Margin="4" Click="NewGraphButton_Click" />
+            <Button x:Name="CreateNodeButton_Top" Content="Add Node" Width="100" Margin="4" Click="CreateNodeButton_Click" />
+            <Button x:Name="EditNodeButton_Top" Content="Edit Node" Width="100" Margin="4" Click="EditNodeButton_Click" />
+            <Button x:Name="RemoveNodeButton_Top" Content="Remove Node" Width="100" Margin="4" Click="RemoveNodeButton_Click" />
+            <Button x:Name="CreateEdgeButton_Top" Content="Add Edge" Width="100" Margin="4" Click="CreateEdgeButton_Click" />
+            <Button x:Name="RemoveEdgeButton_Top" Content="Remove Edge" Width="100" Margin="4" Click="RemoveEdgeButton_Click" />
+        </StackPanel>
+        <!-- original toolbar (hidden while simplifying UI) -->
+        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="6" Visibility="Collapsed">
             <Button x:Name="LoadDemoButton" Content="Load Demo" Width="100" Margin="4" Click="LoadDemoButton_Click" />
             <Button x:Name="ImportGraphButton" Content="Import Graph" Width="110" Margin="4" Click="ImportGraphButton_Click" />
             <Button x:Name="ImportGraphJsonButton" Content="Import Graph JSON" Width="130" Margin="4" Click="ImportGraphJsonButton_Click" />

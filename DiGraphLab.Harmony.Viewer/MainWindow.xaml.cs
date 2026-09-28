@@ -483,6 +483,7 @@ namespace DiGraphLab.Harmony.Viewer
                 var fromChord = new DiGraphLab.Harmony.Chord(fromDto.TraditionalLabel ?? fromDto.Id, fromDto.RootPc, fromDto.Quality, fromDto.Inversion, fromDto.PitchClasses);
                 var toChord = new DiGraphLab.Harmony.Chord(toDto.TraditionalLabel ?? toDto.Id, toDto.RootPc, toDto.Quality, toDto.Inversion, toDto.PitchClasses);
                 // add edge to shared service
+                // create a minimal edge; underlying service accepts chord instances but we treat this as generic digraph
                 _svc.AddEdge(fromChord, toChord, fromDto.RootPc, style: null);
                 // reload viewer with updated graph
                 var (nodes, edges) = GraphAdapter.Convert(_svc.Graph, new ChordFormatter.Options { PreferSharps = true, IncludeBass = true });
@@ -525,18 +526,15 @@ namespace DiGraphLab.Harmony.Viewer
         {
             try
             {
-                var dlg = new CreateNodeWindow();
-                dlg.Owner = this;
-                if (dlg.ShowDialog() == true)
-                {
-                    var dto = dlg.Result;
-                // create chord and add to graph using AddChord on shared service
-                    var chord = new Chord(dto.Label ?? dto.Id, dto.RootPc, dto.Quality, dto.Inversion, dto.PitchClasses);
-                    _svc.AddChord(chord, dto.RootPc, dto.Style);
-                    var (nodes, edges) = GraphAdapter.Convert(_svc.Graph, new ChordFormatter.Options { PreferSharps = true, IncludeBass = true });
-                    _loadedNodes = nodes.ToArray();
-                    GraphCanvasControl.LoadModel(nodes, edges);
-                }
+                // simplified: ask only for a label (generic digraph node)
+                var input = Microsoft.VisualBasic.Interaction.InputBox("Enter node label:", "Add Node", "Node");
+                if (string.IsNullOrWhiteSpace(input)) return;
+                // create a generic node stored as a minimal Chord wrapper so underlying model persists
+                var chord = new Chord(input.Trim(), 0, string.Empty, 0, Array.Empty<int>());
+                _svc.AddChord(chord, 0);
+                var (nodes, edges) = GraphAdapter.Convert(_svc.Graph, new ChordFormatter.Options { PreferSharps = true, IncludeBass = true });
+                _loadedNodes = nodes.ToArray();
+                GraphCanvasControl.LoadModel(nodes, edges);
             }
             catch (Exception ex) { MessageBox.Show("Create node failed: " + ex.Message); }
         }
@@ -694,6 +692,19 @@ namespace DiGraphLab.Harmony.Viewer
         private void FitButton_Click(object sender, RoutedEventArgs e)
         {
             try { GraphCanvasControl.FitToView(); } catch { }
+        }
+
+        private void NewGraphButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                _svc.ResetGraph();
+                var (nodes, edges) = GraphAdapter.Convert(_svc.Graph, new ChordFormatter.Options { PreferSharps = true, IncludeBass = true });
+                _loadedNodes = nodes.ToArray();
+                GraphCanvasControl.LoadModel(nodes, edges);
+                PopulateAnalysis(_svc.Graph);
+            }
+            catch { }
         }
 
         private void ZoomInButton_Click(object sender, RoutedEventArgs e)
