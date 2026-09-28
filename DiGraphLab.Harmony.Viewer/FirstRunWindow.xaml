@@ -20,8 +20,10 @@
         </StackPanel>
         <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
             <CheckBox x:Name="DontShowCheck" VerticalAlignment="Center" Margin="0,0,12,0">Don't show again</CheckBox>
-            <Button x:Name="CloseBtn" Width="90" Margin="0,0,12,0" Click="CloseBtn_Click">Got it</Button>
-            <Button Width="80" Click="OpenGuide_Click">Open Guide</Button>
+            <Button x:Name="BackBtn" Width="80" Margin="0,0,12,0" Click="BackBtn_Click" IsEnabled="False">Back</Button>
+            <Button x:Name="NextBtn" Width="80" Margin="0,0,12,0" Click="NextBtn_Click">Next</Button>
+            <Button x:Name="OpenGuideBtn" Width="90" Click="OpenGuide_Click">Open Guide</Button>
+            <Button x:Name="CloseBtn" Width="90" Margin="12,0,0,0" Click="CloseBtn_Click">Close</Button>
         </StackPanel>
     </Grid>
 </Window>
