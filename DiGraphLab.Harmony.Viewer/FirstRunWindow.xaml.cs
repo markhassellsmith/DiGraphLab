@@ -2,6 +2,8 @@ using System;
 using System.Linq;
 using System.IO;
 using System.Windows;
+using System.Windows.Media;
+using System.Windows.Documents;
 
 namespace DiGraphLab.Harmony.Viewer
 {
@@ -51,12 +53,51 @@ namespace DiGraphLab.Harmony.Viewer
         {
             if (_step < _steps.Length - 1) _step++;
             UpdateStep();
+            // show highlight for current step
+            ClearHighlight();
+            switch (_step)
+            {
+                case 0:
+                    ShowHighlight("LoadDemoButton", _steps[_step]);
+                    break;
+                case 1:
+                    ShowHighlight("GraphCanvasControl", _steps[_step]);
+                    break;
+                case 2:
+                    ShowHighlight("Inspector_Quality", _steps[_step]);
+                    break;
+                case 3:
+                    ShowHighlight("CreateEdgeButton", _steps[_step]);
+                    break;
+                default:
+                    ClearHighlight();
+                    break;
+            }
         }
 
         private void BackBtn_Click(object sender, RoutedEventArgs e)
         {
             if (_step > 0) _step--;
             UpdateStep();
+            ClearHighlight();
+            switch (_step)
+            {
+                case 0:
+                    ShowHighlight("LoadDemoButton", _steps[_step]);
+                    break;
+                case 1:
+                    ShowHighlight("GraphCanvasControl", _steps[_step]);
+                    break;
+                case 2:
+                    ShowHighlight("Inspector_Quality", _steps[_step]);
+                    break;
+                case 3:
+                    ShowHighlight("CreateEdgeButton", _steps[_step]);
+                    break;
+                default:
+                    ClearHighlight();
+                    break;
+            }
         }
 
         private void UpdateStep()
@@ -73,6 +114,48 @@ namespace DiGraphLab.Harmony.Viewer
                 }
                 BackBtn.IsEnabled = _step > 0;
                 NextBtn.IsEnabled = _step < _steps.Length - 1;
+            }
+            catch { }
+        }
+
+        // highlight helper: show an adorner on the owner window for a named target
+        private HighlightAdorner? _currentAdorner;
+        private void ShowHighlight(string elementName, string tip)
+        {
+            try
+            {
+                if (this.Owner is not MainWindow main) return;
+                var target = main.FindName(elementName) as System.Windows.FrameworkElement;
+                if (target == null) return;
+                var layer = AdornerLayer.GetAdornerLayer((Visual)main.Content!);
+                if (layer == null) return;
+                ClearHighlight();
+                _currentAdorner = new HighlightAdorner(target, tip);
+                layer.Add(_currentAdorner);
+                // update on layout changes
+                target.LayoutUpdated += Target_LayoutUpdated;
+            }
+            catch { }
+        }
+
+        private void Target_LayoutUpdated(object? sender, EventArgs e)
+        {
+            try { _currentAdorner?.InvalidateVisual(); } catch { }
+        }
+
+        private void ClearHighlight()
+        {
+            try
+            {
+                if (_currentAdorner != null)
+                {
+                    if (this.Owner is MainWindow main && main.Content is Visual root)
+                    {
+                        var layer = AdornerLayer.GetAdornerLayer(root);
+                        if (layer != null) layer.Remove(_currentAdorner);
+                    }
+                    _currentAdorner = null;
+                }
             }
             catch { }
         }
