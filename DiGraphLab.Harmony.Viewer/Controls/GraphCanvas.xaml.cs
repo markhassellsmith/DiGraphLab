@@ -275,6 +275,10 @@ namespace DiGraphLab.Harmony.Viewer.Controls
                 // color by normalized quality key if available, otherwise fall back to Quality text
                 var fill = GetBrushForQuality(n.Quality, n.Styles.FirstOrDefault() ?? n.Quality);
                 var rect = new Rectangle { Width = 120, Height = 36, RadiusX = 6, RadiusY = 6, Fill = fill, Stroke = Brushes.DarkSlateGray, StrokeThickness = 1.2 };
+                rect.Tag = "MAIN_RECT";
+                // selection overlay - hidden by default, shown when node is selected
+                var selOverlay = new Rectangle { Width = 120, Height = 36, RadiusX = 8, RadiusY = 8, Fill = Brushes.Transparent, Stroke = Brushes.OrangeRed, StrokeThickness = 4.0, Visibility = Visibility.Collapsed, IsHitTestVisible = false };
+                selOverlay.Tag = "SEL_OVERLAY";
                 var txt = new TextBlock { Text = n.Label, TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center, Width = 110 };
                 Canvas.SetLeft(txt, 5); Canvas.SetTop(txt, 6);
                 // decoration: count badge (top-right) and style markers (bottom-left)
@@ -293,7 +297,9 @@ namespace DiGraphLab.Harmony.Viewer.Controls
                     mark.Fill = GetBrushForQuality(n.Quality, s ?? n.Quality);
                     stylePanel.Children.Add(mark);
                 }
-                g.Children.Add(rect); g.Children.Add(txt); g.Children.Add(badge); g.Children.Add(badgeTxt); g.Children.Add(stylePanel);
+                g.Children.Add(rect);
+                g.Children.Add(selOverlay);
+                g.Children.Add(txt); g.Children.Add(badge); g.Children.Add(badgeTxt); g.Children.Add(stylePanel);
                 PART_Canvas.Children.Add(g);
                 n.Element = g;
 
@@ -402,8 +408,10 @@ namespace DiGraphLab.Harmony.Viewer.Controls
             {
                 if (node.Element is Canvas g)
                 {
-                    var rect = g.Children.OfType<Rectangle>().FirstOrDefault();
+                    var rect = g.Children.OfType<Rectangle>().FirstOrDefault(r => (r.Tag as string) == "MAIN_RECT");
                     if (rect != null) rect.Stroke = Brushes.DarkSlateGray;
+                    var overlay = g.Children.OfType<Rectangle>().FirstOrDefault(r => (r.Tag as string) == "SEL_OVERLAY");
+                    if (overlay != null) overlay.Visibility = Visibility.Collapsed;
                 }
             }
         }
@@ -413,12 +421,12 @@ namespace DiGraphLab.Harmony.Viewer.Controls
             if (_selectedIds.Contains(n.Id))
             {
                 _selectedIds.Remove(n.Id);
-                if (n.Element is Canvas g) { var rect = g.Children.OfType<Rectangle>().FirstOrDefault(); if (rect != null) { rect.Stroke = Brushes.DarkSlateGray; rect.StrokeThickness = 1.2; } }
+                if (n.Element is Canvas g) { var rect = g.Children.OfType<Rectangle>().FirstOrDefault(r => (r.Tag as string) == "MAIN_RECT"); if (rect != null) { rect.Stroke = Brushes.DarkSlateGray; rect.StrokeThickness = 1.2; } var overlay = g.Children.OfType<Rectangle>().FirstOrDefault(r => (r.Tag as string) == "SEL_OVERLAY"); if (overlay != null) overlay.Visibility = Visibility.Collapsed; }
             }
             else
             {
                 _selectedIds.Add(n.Id);
-                if (n.Element is Canvas g) { var rect = g.Children.OfType<Rectangle>().FirstOrDefault(); if (rect != null) { rect.Stroke = Brushes.OrangeRed; rect.StrokeThickness = 3.0; } }
+                if (n.Element is Canvas g) { var rect = g.Children.OfType<Rectangle>().FirstOrDefault(r => (r.Tag as string) == "MAIN_RECT"); if (rect != null) { rect.Stroke = Brushes.OrangeRed; rect.StrokeThickness = 3.0; } var overlay = g.Children.OfType<Rectangle>().FirstOrDefault(r => (r.Tag as string) == "SEL_OVERLAY"); if (overlay != null) overlay.Visibility = Visibility.Visible; }
             }
         }
 
